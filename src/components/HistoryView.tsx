@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Check,
   X,
+  Calculator,
+  Edit3,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SesiPenilaian } from "../types";
@@ -307,6 +309,64 @@ export default function HistoryView({
                       <Globe className="h-3 w-3 shrink-0" />
                       {s.rataRataPlagiarismePersen || 0}%
                     </span>
+                  </div>
+                </div>
+
+                {/* Rincian Poin Per Butir Soal */}
+                <div className="mb-3.5 p-3 rounded-xl bg-slate-950/90 border border-slate-800/80 shadow-inner">
+                  <div className="flex items-center justify-between gap-1 mb-2 pb-1.5 border-b border-slate-800/70">
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calculator className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Poin Per Soal ({s.soalList.length} Butir)</span>
+                    </span>
+                    <span className="text-[11px] font-black text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded-lg border border-indigo-800/60">
+                      Total: {s.totalNilaiDiberikan} / {s.totalNilaiMaksimal} Poin
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.soalList.map((soal) => {
+                      const isEvaluated = !!soal.analisis;
+                      const score = soal.analisis ? soal.analisis.nilaiDiberikan : 0;
+                      const max = soal.nilaiMaksimal;
+                      const ratio = max > 0 ? score / max : 0;
+                      const isOverride = soal.analisis?.isManualOverride;
+
+                      return (
+                        <div
+                          key={soal.id || soal.nomorSoal}
+                          title={
+                            isEvaluated
+                              ? `Soal #${soal.nomorSoal}: ${score}/${max} Poin (Kesesuaian: ${soal.analisis!.kesesuaianPersen}%, Indikasi AI: ${soal.analisis!.indikasiAiPersen}%)${
+                                  isOverride ? " [Nilai disesuaikan manual oleh guru]" : ""
+                                }`
+                              : `Soal #${soal.nomorSoal}: Belum dinilai`
+                          }
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                            !isEvaluated
+                              ? "bg-slate-900/80 border-slate-800 text-slate-500"
+                              : ratio >= 0.75
+                              ? "bg-emerald-950/60 border-emerald-800/70 text-emerald-300"
+                              : ratio >= 0.5
+                              ? "bg-blue-950/60 border-blue-800/70 text-blue-300"
+                              : "bg-rose-950/60 border-rose-800/70 text-rose-300"
+                          }`}
+                        >
+                          <span className="text-[10px] text-slate-400 font-medium">Soal {soal.nomorSoal}:</span>
+                          <span className="font-extrabold text-xs">
+                            {isEvaluated ? score : "-"}/{max}
+                          </span>
+                          {isOverride && (
+                            <span
+                              className="text-[9px] text-amber-300 bg-amber-950/90 px-1 py-0.2 rounded border border-amber-700/80 font-semibold"
+                              title="Poin disesuaikan guru"
+                            >
+                              Edit
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
