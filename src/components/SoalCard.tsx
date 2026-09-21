@@ -536,14 +536,37 @@ export default function SoalCard({
               {/* Metrik Pill */}
               <div className="flex items-center space-x-2 flex-wrap">
                 {/* Nilai Diberikan */}
-                <div className="px-3 py-1 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-indigo-300 text-xs font-bold">
-                  Nilai: {soal.analisis.nilaiDiberikan} / {soal.nilaiMaksimal}
+                <div className="px-3 py-1 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-indigo-300 text-xs font-bold flex items-center gap-1.5">
+                  <span>Nilai: {soal.analisis.nilaiDiberikan} / {soal.nilaiMaksimal}</span>
+                  {soal.analisis.nilaiDiberikan < Math.round(((soal.analisis.kesesuaianPersen / 100) * soal.nilaiMaksimal) * 10) / 10 && (
+                    <span className="text-[10px] text-rose-300 font-semibold bg-rose-950/90 px-1.5 py-0.5 rounded border border-rose-800/60" title="Nilai dipotong karena terindikasi AI atau Plagiat">
+                      Penalti Integritas
+                    </span>
+                  )}
                 </div>
 
-                {/* Kesesuaian */}
-                <div className="px-3 py-1 rounded-xl bg-blue-950/80 border border-blue-800/80 text-blue-300 text-xs font-bold flex items-center gap-1.5">
-                  <FileCheck className="h-3.5 w-3.5 text-blue-400" />
+                {/* Kesesuaian Materi */}
+                <div
+                  className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
+                    soal.analisis.kesesuaianPersen >= 85
+                      ? "bg-emerald-950/80 border-emerald-800/80 text-emerald-300"
+                      : soal.analisis.kesesuaianPersen >= 50
+                      ? "bg-blue-950/80 border-blue-800/80 text-blue-300"
+                      : "bg-rose-950/80 border-rose-800/80 text-rose-300"
+                  }`}
+                  title={
+                    soal.analisis.kesesuaianPersen < 50
+                      ? "Jawaban tidak sinkron / melenceng / kurang tepat terhadap pertanyaan soal"
+                      : "Tingkat kesesuaian dan kebenaran materi jawaban terhadap soal"
+                  }
+                >
+                  <FileCheck className="h-3.5 w-3.5" />
                   <span>Kesesuaian: {soal.analisis.kesesuaianPersen}%</span>
+                  {soal.analisis.kesesuaianPersen < 40 && (
+                    <span className="text-[10px] font-normal text-rose-200">
+                      (Tidak Sinkron)
+                    </span>
+                  )}
                 </div>
 
                 {/* Indikasi Jawaban AI */}
@@ -581,6 +604,21 @@ export default function SoalCard({
                 </div>
               </div>
             </div>
+
+            {/* Alert Banner jika Jawaban Tidak Sinkron / Rendah */}
+            {soal.analisis.kesesuaianPersen < 40 && (
+              <div className="mb-2.5 p-2.5 rounded-lg bg-rose-950/50 border border-rose-800/60 flex items-start gap-2 text-rose-200 text-xs">
+                <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-rose-300 text-[11px] uppercase tracking-wider">
+                    Catatan Ketidaksinkronan Jawaban:
+                  </span>
+                  <span className="text-[11px] text-rose-200/90 leading-relaxed">
+                    Jawaban siswa dinilai belum sinkron atau melenceng dari topik yang diminta soal, sehingga persentase kesesuaian dan nilai pokok diberikan rendah.
+                  </span>
+                </div>
+              </div>
+            )}
 
             <p className="text-xs text-slate-300 leading-relaxed">
               {soal.analisis.ringkasanAnalisis}
