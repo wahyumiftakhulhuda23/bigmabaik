@@ -145,3 +145,34 @@ export function calculateSessionTotals(soalList: SoalItem[]) {
     totalCount: soalList.length,
   };
 }
+
+/**
+ * Reset naskah jawaban, nama siswa, dan kelas untuk penilaian siswa berikutnya,
+ * sedangkan naskah soal, bobot nilai, nomor soal, mata pelajaran, dan judul ujian tetap dipertahankan.
+ */
+export function resetSessionAnswersForNextStudent(session: SesiPenilaian): SesiPenilaian {
+  const resetSoalList: SoalItem[] = session.soalList.map((s) => ({
+    ...s,
+    jawabanTeks: "",
+    jawabanGambarBase64: null,
+    jawabanGambarMimeType: null,
+    jawabanGambarFileName: null,
+    analisis: null,
+    isSaved: false,
+    updatedAt: new Date().toISOString(),
+  }));
+
+  const totals = calculateSessionTotals(resetSoalList);
+
+  return {
+    ...session,
+    id: `sesi-${Date.now()}`,
+    namaSiswa: "",
+    kelas: "",
+    nomorInduk: "",
+    soalList: resetSoalList,
+    ...totals,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}

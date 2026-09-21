@@ -10,6 +10,7 @@ import {
   User,
   GraduationCap,
   Bot,
+  Globe,
   FileCheck,
   AlertTriangle,
   Check,
@@ -263,22 +264,22 @@ export default function HistoryView({
                 </div>
 
                 {/* Indikator Metrik */}
-                <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 mb-4 text-xs">
+                <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 mb-4 text-xs">
                   <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block uppercase">
-                      Rerata Kesesuaian
+                    <span className="text-[10px] text-slate-500 font-semibold block uppercase truncate">
+                      Kesesuaian
                     </span>
-                    <span className="font-bold text-blue-400 flex items-center gap-1 mt-0.5">
-                      <FileCheck className="h-3 w-3" />
+                    <span className="font-bold text-blue-400 flex items-center gap-1 mt-0.5 text-xs">
+                      <FileCheck className="h-3 w-3 shrink-0" />
                       {s.rataRataKesesuaianPersen}%
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-semibold block uppercase">
+                    <span className="text-[10px] text-slate-500 font-semibold block uppercase truncate">
                       Indikasi AI
                     </span>
                     <span
-                      className={`font-bold flex items-center gap-1 mt-0.5 ${
+                      className={`font-bold flex items-center gap-1 mt-0.5 text-xs ${
                         s.rataRataAiPersen > 60
                           ? "text-rose-400"
                           : s.rataRataAiPersen > 30
@@ -286,8 +287,25 @@ export default function HistoryView({
                           : "text-emerald-400"
                       }`}
                     >
-                      <Bot className="h-3 w-3" />
+                      <Bot className="h-3 w-3 shrink-0" />
                       {s.rataRataAiPersen}%
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-semibold block uppercase truncate">
+                      Plagiat Web
+                    </span>
+                    <span
+                      className={`font-bold flex items-center gap-1 mt-0.5 text-xs ${
+                        (s.rataRataPlagiarismePersen || 0) > 60
+                          ? "text-purple-400"
+                          : (s.rataRataPlagiarismePersen || 0) > 30
+                          ? "text-amber-400"
+                          : "text-teal-400"
+                      }`}
+                    >
+                      <Globe className="h-3 w-3 shrink-0" />
+                      {s.rataRataPlagiarismePersen || 0}%
                     </span>
                   </div>
                 </div>

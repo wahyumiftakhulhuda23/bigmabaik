@@ -14,6 +14,7 @@ import {
   saveSessionToStorage,
   deleteSessionFromStorage,
   calculateSessionTotals,
+  resetSessionAnswersForNextStudent,
   getStoredApiKeys,
 } from "./utils/storage";
 import {
@@ -354,6 +355,40 @@ export default function App() {
     setTimeout(() => setSaveAllSuccess(false), 2000);
   };
 
+  // Tambahkan ke Riwayat & Reset Form untuk Siswa Berikutnya
+  const handleAddToHistory = () => {
+    const namaClean = (session.namaSiswa || "").trim();
+    if (!namaClean) {
+      sound.playWarning();
+      showToast("Harap isi Nama Siswa terlebih dahulu sebelum menambahkan ke riwayat.", "error");
+      return;
+    }
+
+    const markedAllSaved = session.soalList.map((s) => ({ ...s, isSaved: true }));
+    const totals = calculateSessionTotals(markedAllSaved);
+    const sessionToSave: SesiPenilaian = {
+      ...session,
+      namaSiswa: namaClean,
+      soalList: markedAllSaved,
+      ...totals,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 1. Simpan sesi lengkap ke riwayat per nama dan kelas
+    const updatedHistory = saveSessionToStorage(sessionToSave);
+    setHistoryList(updatedHistory);
+
+    // 2. Reset HANYA naskah jawaban siswa, nama siswa, dan kelas (naskah soal, bobot, mapel, & judul tetap)
+    const freshForNextStudent = resetSessionAnswersForNextStudent(sessionToSave);
+    setSession(freshForNextStudent);
+
+    sound.playSuccess();
+    showToast(
+      `Nilai siswa "${namaClean}" ${session.kelas ? `(Kelas ${session.kelas})` : ""} berhasil ditambahkan ke riwayat! Form jawaban, nama, dan kelas telah direset untuk siswa berikutnya.`,
+      "success"
+    );
+  };
+
   // Analyze single question
   const handleAnalyzeSingle = async (soal: SoalItem) => {
     if (!soal.jawabanTeks && !soal.jawabanGambarBase64) {
@@ -576,6 +611,7 @@ export default function App() {
                 darkMode={darkMode}
                 onAddSoal={handleAddSoal}
                 onSaveAll={handleSaveAll}
+                onAddToHistory={handleAddToHistory}
                 onAnalyzeAll={handleAnalyzeAll}
                 onOpenReport={() =>
                   requireLicenseOrRun(() => {

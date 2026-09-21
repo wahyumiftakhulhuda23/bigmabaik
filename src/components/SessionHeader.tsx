@@ -42,6 +42,13 @@ export default function SessionHeader({ session, onChange }: SessionHeaderProps)
           />
         </div>
       </div>
+      <p className="mt-3 text-[11px] text-slate-400/80 flex items-center gap-1.5 border-t border-slate-800/80 pt-2.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+        <span>
+          <strong>Alur Cepat:</strong> Nilai jawaban siswa, lalu klik{" "}
+          <strong className="text-emerald-400">&quot;Tambahkan ke Riwayat&quot;</strong>. Naskah jawaban, nama, dan kelas akan otomatis direset untuk siswa berikutnya (soal tetap utuh).
+        </span>
+      </p>
     </div>
   );
 }

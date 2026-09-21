@@ -7,6 +7,7 @@ import {
   Loader2,
   Check,
   RotateCcw,
+  UserCheck,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { SesiPenilaian } from "../types";
@@ -17,6 +18,7 @@ interface SessionActionBarProps {
   darkMode: boolean;
   onAddSoal: () => void;
   onSaveAll: () => void;
+  onAddToHistory: () => void;
   onAnalyzeAll: () => Promise<void>;
   onOpenReport: () => void;
   onExportExcel: () => void;
@@ -29,6 +31,7 @@ export default function SessionActionBar({
   session,
   onAddSoal,
   onSaveAll,
+  onAddToHistory,
   onAnalyzeAll,
   onOpenReport,
   onExportExcel,
@@ -125,6 +128,18 @@ export default function SessionActionBar({
 
           {/* Action Buttons dengan Animasi Motion */}
           <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800/80">
+            {/* Tambahkan ke Riwayat & Siapkan Siswa Berikutnya */}
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={onAddToHistory}
+              title="Simpan nilai siswa ini ke riwayat, lalu reset nama, kelas, dan jawaban untuk siswa berikutnya (soal tetap utuh)"
+              className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white flex items-center space-x-1.5 transition-all shadow-md shadow-emerald-950/40 cursor-pointer border border-emerald-400/30"
+            >
+              <UserCheck className="h-4 w-4 text-emerald-100" />
+              <span>Tambahkan ke Riwayat</span>
+            </motion.button>
+
             {/* Simpan Semua */}
             <motion.button
               whileHover={{ scale: 1.03 }}
