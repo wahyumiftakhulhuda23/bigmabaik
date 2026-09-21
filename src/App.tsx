@@ -1,0 +1,718 @@
+import { useState, useEffect } from "react";
+import Header from "./components/Header";
+import SessionHeader from "./components/SessionHeader";
+import SessionActionBar from "./components/SessionActionBar";
+import SoalCard from "./components/SoalCard";
+import HistoryView from "./components/HistoryView";
+import ReportModal from "./components/ReportModal";
+import ApiKeyModal from "./components/ApiKeyModal";
+import DonationModal from "./components/DonationModal";
+import { SesiPenilaian, SoalItem } from "./types";
+import {
+  createDefaultSession,
+  getStoredSessions,
+  saveSessionToStorage,
+  deleteSessionFromStorage,
+  calculateSessionTotals,
+  getStoredApiKeys,
+} from "./utils/storage";
+import {
+  isLicenseActive,
+  hasShownFirstVisit,
+  markFirstVisitShown,
+} from "./utils/license";
+import { exportSessionsToExcel } from "./utils/excelExport";
+import { CheckCircle2, AlertCircle, Info, X, Plus } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { sound } from "./utils/audio";
+
+export default function App() {
+  // Selalu Dark Mode sesuai permintaan revisi
+  const darkMode = true;
+
+  // Navigation tab
+  const [activeTab, setActiveTab] = useState<"editor" | "history">("editor");
+
+  // Gemini API keys
+  const [apiKeys, setApiKeys] = useState<string[]>(() => getStoredApiKeys());
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+
+  // License & Donation State
+  const [isLicensed, setIsLicensed] = useState<boolean>(() => isLicenseActive());
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [donationCanSkip, setDonationCanSkip] = useState(true);
+  const [donationReason, setDonationReason] = useState<
+    "first_visit" | "interval" | "new_session" | "download_report" | "manual"
+  >("manual");
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  // Active Session
+  const [session, setSession] = useState<SesiPenilaian>(() => {
+    const stored = getStoredSessions();
+    if (stored.length > 0) {
+      return stored[0];
+    }
+    return createDefaultSession();
+  });
+
+  // History list
+  const [historyList, setHistoryList] = useState<SesiPenilaian[]>(() => {
+    return getStoredSessions();
+  });
+
+  // Loading states
+  const [analyzingMap, setAnalyzingMap] = useState<Record<string, boolean>>({});
+  const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
+  const [saveAllSuccess, setSaveAllSuccess] = useState(false);
+
+  // In-app Toast Notification state
+  const [toast, setToast] = useState<{
+    id: number;
+    type: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" | "info" = "info") => {
+    const id = Date.now();
+    setToast({ id, type, text });
+
+    if (type === "success") {
+      sound.playSuccess();
+    } else if (type === "error") {
+      sound.playWarning();
+    } else {
+      sound.playTabClick();
+    }
+
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr));
+    }, 3400);
+  };
+
+  // Trigger modal jika user pertama kali mengunjungi aplikasi (bisa di-skip)
+  useEffect(() => {
+    if (!isLicenseActive() && !hasShownFirstVisit()) {
+      markFirstVisitShown();
+      setDonationCanSkip(true);
+      setDonationReason("first_visit");
+      setIsDonationModalOpen(true);
+    }
+  }, []);
+
+  // Trigger modal setiap 10 menit sekali (bisa di-skip) jika lisensi belum aktif
+  useEffect(() => {
+    if (isLicensed) return;
+
+    const intervalId = setInterval(() => {
+      if (!isLicenseActive()) {
+        setDonationCanSkip(true);
+        setDonationReason("interval");
+        setIsDonationModalOpen(true);
+      }
+    }, 10 * 60 * 1000); // 10 menit
+
+    return () => clearInterval(intervalId);
+  }, [isLicensed]);
+
+  // Fungsi proteksi fitur yang memerlukan lisensi (Sesi Baru & Unduh Laporan - tidak bisa di-skip)
+  const requireLicenseOrRun = (
+    action: () => void,
+    featureName: "new_session" | "download_report"
+  ) => {
+    if (isLicensed || isLicenseActive()) {
+      action();
+    } else {
+      sound.playWarning();
+      setPendingAction(() => action);
+      setDonationCanSkip(false);
+      setDonationReason(featureName);
+      setIsDonationModalOpen(true);
+    }
+  };
+
+  const handleDonationClose = (activated: boolean) => {
+    setIsDonationModalOpen(false);
+    if (activated) {
+      setIsLicensed(true);
+      showToast(
+        "Selamat! Lisensi Seumur Hidup berhasil diaktifkan. Seluruh fitur kini telah terbuka!",
+        "success"
+      );
+      if (pendingAction) {
+        pendingAction();
+        setPendingAction(null);
+      }
+    } else {
+      if (!donationCanSkip) {
+        setPendingAction(null);
+        showToast(
+          "Fitur terkunci. Silakan masukkan password lisensi untuk menggunakan fitur ini.",
+          "error"
+        );
+      }
+    }
+  };
+
+  // Modal report state
+  const [reportModalSession, setReportModalSession] = useState<SesiPenilaian | null>(null);
+
+  // Handle Session Header updates
+  const handleUpdateSessionMeta = (updated: Partial<SesiPenilaian>) => {
+    setSession((prev) => {
+      const next = { ...prev, ...updated, updatedAt: new Date().toISOString() };
+      return next;
+    });
+  };
+
+  // Add new question
+  const handleAddSoal = () => {
+    sound.playAddCard();
+    setSession((prev) => {
+      const newNomor = prev.soalList.length + 1;
+      const newSoal: SoalItem = {
+        id: `soal-${Date.now()}-${newNomor}`,
+        nomorSoal: newNomor,
+        naskahSoal: "",
+        nilaiMaksimal: 10,
+        jawabanTeks: "",
+        isSaved: false,
+      };
+
+      const nextSoalList = [...prev.soalList, newSoal];
+      const totals = calculateSessionTotals(nextSoalList);
+
+      return {
+        ...prev,
+        soalList: nextSoalList,
+        ...totals,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    showToast(`Butir Soal #${session.soalList.length + 1} berhasil ditambahkan.`, "info");
+  };
+
+  // Update specific question
+  const handleUpdateSoal = (id: string, updated: Partial<SoalItem>) => {
+    setSession((prev) => {
+      const nextSoalList = prev.soalList.map((s) =>
+        s.id === id ? { ...s, ...updated, updatedAt: new Date().toISOString() } : s
+      );
+      const totals = calculateSessionTotals(nextSoalList);
+      return {
+        ...prev,
+        soalList: nextSoalList,
+        ...totals,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  // Save single question
+  const handleSaveSoal = (id: string) => {
+    setSession((prev) => {
+      const nextSoalList = prev.soalList.map((s) =>
+        s.id === id ? { ...s, isSaved: true, updatedAt: new Date().toISOString() } : s
+      );
+      const totals = calculateSessionTotals(nextSoalList);
+      const updatedSession: SesiPenilaian = {
+        ...prev,
+        soalList: nextSoalList,
+        ...totals,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedHistory = saveSessionToStorage(updatedSession);
+      setHistoryList(updatedHistory);
+      return updatedSession;
+    });
+    showToast("Soal berhasil disimpan.", "success");
+  };
+
+  // Clear single question inputs
+  const handleClearSoal = (id: string) => {
+    sound.playDelete();
+    setSession((prev) => {
+      const nextSoalList = prev.soalList.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              naskahSoal: "",
+              gambarSoalBase64: null,
+              gambarSoalMimeType: null,
+              gambarSoalFileName: null,
+              jawabanTeks: "",
+              jawabanGambarBase64: null,
+              jawabanGambarMimeType: null,
+              jawabanGambarFileName: null,
+              analisis: null,
+              isSaved: false,
+              updatedAt: new Date().toISOString(),
+            }
+          : s
+      );
+      const totals = calculateSessionTotals(nextSoalList);
+      const nextSession = {
+        ...prev,
+        soalList: nextSoalList,
+        ...totals,
+        updatedAt: new Date().toISOString(),
+      };
+      const updatedHistory = saveSessionToStorage(nextSession);
+      setHistoryList(updatedHistory);
+      return nextSession;
+    });
+    showToast("Isian pada butir soal ini telah dibersihkan.", "info");
+  };
+
+  // Delete question
+  const handleDeleteSoal = (id: string) => {
+    sound.playDelete();
+    if (session.soalList.length <= 1) {
+      setSession((prev) => {
+        const resetList: SoalItem[] = [
+          {
+            id: `soal-${Date.now()}-1`,
+            nomorSoal: 1,
+            naskahSoal: "",
+            nilaiMaksimal: 10,
+            jawabanTeks: "",
+            gambarSoalBase64: null,
+            gambarSoalMimeType: null,
+            gambarSoalFileName: null,
+            jawabanGambarBase64: null,
+            jawabanGambarMimeType: null,
+            jawabanGambarFileName: null,
+            analisis: null,
+            isSaved: false,
+          },
+        ];
+        const totals = calculateSessionTotals(resetList);
+        const nextSession = {
+          ...prev,
+          soalList: resetList,
+          ...totals,
+          updatedAt: new Date().toISOString(),
+        };
+        const updatedHistory = saveSessionToStorage(nextSession);
+        setHistoryList(updatedHistory);
+        return nextSession;
+      });
+      showToast("Soal dikosongkan ke format awal.", "info");
+      return;
+    }
+
+    setSession((prev) => {
+      const filtered = prev.soalList.filter((s) => s.id !== id);
+      const reindexed = filtered.map((s, idx) => ({
+        ...s,
+        nomorSoal: idx + 1,
+      }));
+      const totals = calculateSessionTotals(reindexed);
+      const nextSession: SesiPenilaian = {
+        ...prev,
+        soalList: reindexed,
+        ...totals,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedHistory = saveSessionToStorage(nextSession);
+      setHistoryList(updatedHistory);
+      return nextSession;
+    });
+    showToast("Butir soal berhasil dihapus.", "info");
+  };
+
+  // Reset entire session to blank
+  const handleResetSession = () => {
+    sound.playDelete();
+    const fresh = createDefaultSession();
+    setSession(fresh);
+    showToast("Semua data nama siswa, kelas, dan soal berhasil dikosongkan.", "info");
+  };
+
+  // Save All
+  const handleSaveAll = () => {
+    setSession((prev) => {
+      const markedAllSaved = prev.soalList.map((s) => ({ ...s, isSaved: true }));
+      const totals = calculateSessionTotals(markedAllSaved);
+      const updatedSession: SesiPenilaian = {
+        ...prev,
+        soalList: markedAllSaved,
+        ...totals,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedHistory = saveSessionToStorage(updatedSession);
+      setHistoryList(updatedHistory);
+      return updatedSession;
+    });
+
+    setSaveAllSuccess(true);
+    showToast("Semua soal & penilaian berhasil disimpan ke riwayat.", "success");
+    setTimeout(() => setSaveAllSuccess(false), 2000);
+  };
+
+  // Analyze single question
+  const handleAnalyzeSingle = async (soal: SoalItem) => {
+    if (!soal.jawabanTeks && !soal.jawabanGambarBase64) {
+      showToast("Harap masukkan teks jawaban atau lampirkan foto/screenshot jawaban terlebih dahulu.", "error");
+      return;
+    }
+
+    setAnalyzingMap((prev) => ({ ...prev, [soal.id]: true }));
+
+    try {
+      const response = await fetch("/api/analyze-single", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: soal.id,
+          nomorSoal: soal.nomorSoal,
+          naskahSoal: soal.naskahSoal,
+          gambarSoalBase64: soal.gambarSoalBase64,
+          gambarSoalMimeType: soal.gambarSoalMimeType,
+          nilaiMaksimal: soal.nilaiMaksimal,
+          jawabanTeks: soal.jawabanTeks,
+          jawabanGambarBase64: soal.jawabanGambarBase64,
+          jawabanGambarMimeType: soal.jawabanGambarMimeType,
+          apiKeys: apiKeys,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.error && data.error.includes("API Key")) {
+          setIsApiKeyModalOpen(true);
+        }
+        throw new Error(data.error || "Gagal menganalisis jawaban soal ini.");
+      }
+
+      setSession((prev) => {
+        const nextSoalList = prev.soalList.map((s) =>
+          s.id === soal.id ? { ...s, analisis: data.result, isSaved: true } : s
+        );
+        const totals = calculateSessionTotals(nextSoalList);
+        const updatedSession = {
+          ...prev,
+          soalList: nextSoalList,
+          ...totals,
+          updatedAt: new Date().toISOString(),
+        };
+        const updatedHistory = saveSessionToStorage(updatedSession);
+        setHistoryList(updatedHistory);
+        return updatedSession;
+      });
+      showToast(`Soal #${soal.nomorSoal} berhasil dianalisis AI!`, "success");
+    } catch (err: any) {
+      console.error("Gagal analisis soal:", err);
+      let msg = err.message || "Terjadi kendala saat menganalisis.";
+      if (msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE")) {
+        msg = "Server Google AI sedang mengalami lonjakan beban sementara (503). Silakan coba kembali.";
+      }
+      showToast(msg, "error");
+    } finally {
+      setAnalyzingMap((prev) => ({ ...prev, [soal.id]: false }));
+    }
+  };
+
+  // Analyze all questions
+  const handleAnalyzeAll = async () => {
+    const hasAnyAnswer = session.soalList.some((s) => s.jawabanTeks || s.jawabanGambarBase64);
+    if (!hasAnyAnswer) {
+      showToast("Belum ada jawaban siswa yang diisi atau diunggah pada butir soal manapun.", "error");
+      return;
+    }
+
+    setIsBatchAnalyzing(true);
+
+    try {
+      const payload = session.soalList.map((s) => ({
+        id: s.id,
+        nomorSoal: s.nomorSoal,
+        naskahSoal: s.naskahSoal,
+        gambarSoalBase64: s.gambarSoalBase64,
+        gambarSoalMimeType: s.gambarSoalMimeType,
+        nilaiMaksimal: s.nilaiMaksimal,
+        jawabanTeks: s.jawabanTeks,
+        jawabanGambarBase64: s.jawabanGambarBase64,
+        jawabanGambarMimeType: s.jawabanGambarMimeType,
+      }));
+
+      const response = await fetch("/api/analyze-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          soalList: payload,
+          apiKeys: apiKeys,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.error && data.error.includes("API Key")) {
+          setIsApiKeyModalOpen(true);
+        }
+        throw new Error(data.error || "Gagal melakukan analisis massal.");
+      }
+
+      const resultsMap: Record<string, any> = {};
+      data.results.forEach((r: any) => {
+        resultsMap[r.soalId] = r;
+      });
+
+      setSession((prev) => {
+        const nextSoalList = prev.soalList.map((s) => ({
+          ...s,
+          analisis: resultsMap[s.id] || s.analisis,
+          isSaved: true,
+        }));
+        const totals = calculateSessionTotals(nextSoalList);
+        const updatedSession = {
+          ...prev,
+          soalList: nextSoalList,
+          ...totals,
+          updatedAt: new Date().toISOString(),
+        };
+        const updatedHistory = saveSessionToStorage(updatedSession);
+        setHistoryList(updatedHistory);
+        return updatedSession;
+      });
+      showToast("Semua butir soal berhasil dianalisis AI!", "success");
+    } catch (err: any) {
+      console.error("Gagal analisis semua soal:", err);
+      let msg = err.message || "Terjadi kendala saat analisis massal.";
+      if (msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE")) {
+        msg = "Server Google AI sedang mengalami lonjakan beban sementara (503). Silakan coba kembali.";
+      }
+      showToast(msg, "error");
+    } finally {
+      setIsBatchAnalyzing(false);
+    }
+  };
+
+  // Start a new session
+  const handleNewSession = () => {
+    sound.playAddCard();
+    const fresh = createDefaultSession();
+    setSession(fresh);
+    setActiveTab("editor");
+    showToast("Sesi baru telah disiapkan dalam kondisi bersih.", "info");
+  };
+
+  // Delete session from history
+  const handleDeleteSession = (sessionId: string) => {
+    sound.playDelete();
+    const updated = deleteSessionFromStorage(sessionId);
+    setHistoryList(updated);
+    if (session.id === sessionId) {
+      if (updated.length > 0) {
+        setSession(updated[0]);
+      } else {
+        setSession(createDefaultSession());
+      }
+    }
+    showToast("Sesi riwayat berhasil dihapus.", "info");
+  };
+
+  // Export current session to Excel
+  const handleExportCurrentToExcel = () => {
+    sound.playSuccess();
+    exportSessionsToExcel([session]);
+    showToast("File Excel berwarna berhasil diunduh.", "success");
+  };
+
+  return (
+    <div className="min-h-screen bg-[#090d16] text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200">
+      {/* Toast Notification Bar dengan Animasi Motion */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 15, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="fixed bottom-6 right-6 z-50 pointer-events-auto"
+          >
+            <div
+              className={`flex items-center space-x-3 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-semibold backdrop-blur-md ${
+                toast.type === "success"
+                  ? "bg-emerald-950/90 text-emerald-100 border-emerald-500/40 shadow-emerald-950/50"
+                  : toast.type === "error"
+                  ? "bg-rose-950/90 text-rose-100 border-rose-500/40 shadow-rose-950/50"
+                  : "bg-slate-900/90 text-cyan-100 border-cyan-500/30 shadow-black/60"
+              }`}
+            >
+              {toast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />}
+              {toast.type === "error" && <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+              {toast.type === "info" && <Info className="h-4 w-4 text-cyan-400 shrink-0" />}
+              <span className="pr-1">{toast.text}</span>
+              <button
+                onClick={() => setToast(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors ml-1 cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header dengan Neon Branding, Audio Toggle & Status Donasi/Lisensi */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        historyCount={historyList.length}
+        onNewSession={() => requireLicenseOrRun(handleNewSession, "new_session")}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        apiKeyCount={apiKeys.length}
+        isLicensed={isLicensed}
+        onOpenDonationModal={() => {
+          setDonationCanSkip(true);
+          setDonationReason("manual");
+          setIsDonationModalOpen(true);
+        }}
+      />
+
+      {/* Main Container dengan Animasi Perpindahan Tab */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+        <AnimatePresence mode="wait">
+          {activeTab === "editor" ? (
+            <motion.div
+              key="tab-editor"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-5"
+            >
+              {/* Identitas Siswa: Hanya Nama & Kelas */}
+              <SessionHeader
+                session={session}
+                onChange={handleUpdateSessionMeta}
+                darkMode={darkMode}
+              />
+
+              {/* Action Bar & Stats Ringkas */}
+              <SessionActionBar
+                session={session}
+                darkMode={darkMode}
+                onAddSoal={handleAddSoal}
+                onSaveAll={handleSaveAll}
+                onAnalyzeAll={handleAnalyzeAll}
+                onOpenReport={() =>
+                  requireLicenseOrRun(() => {
+                    sound.playTabClick();
+                    setReportModalSession(session);
+                  }, "download_report")
+                }
+                onExportExcel={() =>
+                  requireLicenseOrRun(handleExportCurrentToExcel, "download_report")
+                }
+                onResetSession={() =>
+                  requireLicenseOrRun(handleResetSession, "new_session")
+                }
+                isBatchAnalyzing={isBatchAnalyzing}
+                saveAllSuccess={saveAllSuccess}
+              />
+
+              {/* Daftar Butir Soal dengan Animasi Stagger & Fade */}
+              <div className="space-y-4">
+                {session.soalList.map((soal) => (
+                  <motion.div
+                    key={soal.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <SoalCard
+                      soal={soal}
+                      totalSoal={session.soalList.length}
+                      darkMode={darkMode}
+                      onUpdate={(updated) => handleUpdateSoal(soal.id, updated)}
+                      onSave={() => handleSaveSoal(soal.id)}
+                      onClear={() => handleClearSoal(soal.id)}
+                      onDelete={() => handleDeleteSoal(soal.id)}
+                      onAnalyze={() => handleAnalyzeSingle(soal)}
+                      isAnalyzing={!!analyzingMap[soal.id]}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Bottom Add Soal Button */}
+              <div className="pt-2 pb-10 flex justify-center">
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  type="button"
+                  onClick={handleAddSoal}
+                  className="px-6 py-3 rounded-2xl border border-dashed border-indigo-500/40 bg-indigo-950/20 hover:bg-indigo-900/30 text-indigo-300 text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer shadow-lg shadow-black/20"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Tambah Butir Soal #{session.soalList.length + 1}</span>
+                </motion.button>
+              </div>
+            </motion.div>
+          ) : (
+            /* Tab Riwayat */
+            <motion.div
+              key="tab-history"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+            >
+              <HistoryView
+                sessions={historyList}
+                darkMode={darkMode}
+                onOpenSession={(s) => {
+                  sound.playTabClick();
+                  setSession(s);
+                  setActiveTab("editor");
+                }}
+                onDeleteSession={handleDeleteSession}
+                onOpenReportModal={(s) =>
+                  requireLicenseOrRun(() => {
+                    sound.playTabClick();
+                    setReportModalSession(s);
+                  }, "download_report")
+                }
+                onRequireLicense={requireLicenseOrRun}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* Modal Donasi & Aktivasi Lisensi Seumur Hidup */}
+      <DonationModal
+        isOpen={isDonationModalOpen}
+        canSkip={donationCanSkip}
+        triggerReason={donationReason}
+        onClose={handleDonationClose}
+        onSuccessActivate={() => {
+          setIsLicensed(true);
+        }}
+      />
+
+      {/* Modal Pengaturan & Verifikasi API Key Gemini */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        darkMode={darkMode}
+        onKeysUpdated={(keys) => setApiKeys(keys)}
+      />
+
+      {/* Modal Laporan PDF/JPG */}
+      {reportModalSession && (
+        <ReportModal
+          session={reportModalSession}
+          darkMode={darkMode}
+          onClose={() => setReportModalSession(null)}
+        />
+      )}
+    </div>
+  );
+}

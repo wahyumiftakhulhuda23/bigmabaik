@@ -1,0 +1,6 @@
+{
+  "name": "BigMA Baik",
+  "description": "Aplikasi analisis nilai ujian, persentase kesesuaian soal, dan indikasi penggunaan AI untuk guru.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

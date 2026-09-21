@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background-color: #090d16;
+  }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #090d16;
+    color: #f1f5f9;
+  }
+}
+
+/* Animasi Warna Neon Text yang Lembut untuk "BigMA Baik" */
+@keyframes neon-flow {
+  0% {
+    background-position: 0% 50%;
+    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4)) drop-shadow(0 0 20px rgba(99, 102, 241, 0.25));
+  }
+  50% {
+    background-position: 100% 50%;
+    filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.45)) drop-shadow(0 0 24px rgba(52, 211, 153, 0.3));
+  }
+  100% {
+    background-position: 0% 50%;
+    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4)) drop-shadow(0 0 20px rgba(99, 102, 241, 0.25));
+  }
+}
+
+@keyframes soft-pulse {
+  0%, 100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+.neon-text-animated {
+  background: linear-gradient(
+    120deg,
+    #38bdf8 0%,
+    #818cf8 25%,
+    #c084fc 50%,
+    #34d399 75%,
+    #38bdf8 100%
+  );
+  background-size: 250% 250%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: neon-flow 6s ease infinite;
+  display: inline-block;
+  letter-spacing: -0.02em;
+  font-weight: 900;
+}
+
+.neon-badge-pulse {
+  animation: soft-pulse 3s ease-in-out infinite;
+}
+
+/* Scrollbar styling khusus Dark Mode */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #0b1120;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
