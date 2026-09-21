@@ -64,6 +64,14 @@ export default function App() {
     return getStoredSessions();
   });
 
+  // History card re-analysis state
+  const [reanalyzingSessionId, setReanalyzingSessionId] = useState<string | null>(null);
+  const [reanalyzingProgress, setReanalyzingProgress] = useState<{
+    current: number;
+    total: number;
+    soalNum: number;
+  } | null>(null);
+
   // Loading & Sequential Analysis states
   const [analyzingMap, setAnalyzingMap] = useState<Record<string, boolean>>({});
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
@@ -657,6 +665,111 @@ export default function App() {
     showToast("Sesi riwayat berhasil dihapus.", "info");
   };
 
+  // Re-analyze all questions of a specific student session in History
+  const handleReanalyzeHistorySession = async (targetSession: SesiPenilaian) => {
+    const questionsToAnalyze = targetSession.soalList.filter(
+      (s) => (s.jawabanTeks && s.jawabanTeks.trim().length > 0) || s.jawabanGambarBase64
+    );
+
+    if (questionsToAnalyze.length === 0) {
+      sound.playWarning();
+      showToast(
+        `Tidak ada jawaban teks maupun lampiran foto pada data siswa "${targetSession.namaSiswa || "Siswa"}".`,
+        "error"
+      );
+      return;
+    }
+
+    setReanalyzingSessionId(targetSession.id);
+    sound.playTabClick();
+    showToast(
+      `Mulai menganalisis ulang seluruh jawaban siswa "${targetSession.namaSiswa || "Siswa"}" (${questionsToAnalyze.length} butir)...`,
+      "info"
+    );
+
+    let currentSessionState = { ...targetSession };
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < questionsToAnalyze.length; i++) {
+      const currentSoal = questionsToAnalyze[i];
+      setReanalyzingProgress({
+        current: i + 1,
+        total: questionsToAnalyze.length,
+        soalNum: currentSoal.nomorSoal,
+      });
+
+      try {
+        const result = await analyzeSingleQuestion({
+          id: currentSoal.id,
+          nomorSoal: currentSoal.nomorSoal,
+          naskahSoal: currentSoal.naskahSoal,
+          gambarSoalBase64: currentSoal.gambarSoalBase64,
+          gambarSoalMimeType: currentSoal.gambarSoalMimeType,
+          nilaiMaksimal: currentSoal.nilaiMaksimal,
+          jawabanTeks: currentSoal.jawabanTeks,
+          jawabanGambarBase64: currentSoal.jawabanGambarBase64,
+          jawabanGambarMimeType: currentSoal.jawabanGambarMimeType,
+          apiKeys: apiKeys,
+        });
+
+        succeeded++;
+
+        const nextSoalList = currentSessionState.soalList.map((s) =>
+          s.id === currentSoal.id ? { ...s, analisis: result, isSaved: true } : s
+        );
+        const totals = calculateSessionTotals(nextSoalList);
+        currentSessionState = {
+          ...currentSessionState,
+          soalList: nextSoalList,
+          ...totals,
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Simpan langsung ke localStorage riwayat
+        const updatedHistory = saveSessionToStorage(currentSessionState);
+        setHistoryList(updatedHistory);
+
+        // Jika sesi ini sedang aktif dibuka di editor, ikut sinkronkan
+        setSession((prev) => (prev.id === currentSessionState.id ? currentSessionState : prev));
+      } catch (err: any) {
+        console.error(`Gagal analisis ulang soal #${currentSoal.nomorSoal}:`, err);
+        failed++;
+        let msg = err.message || "Gagal";
+        if (msg.includes("503") || msg.includes("UNAVAILABLE")) {
+          msg = `Soal #${currentSoal.nomorSoal}: Server AI sibuk (503)`;
+        } else if (msg.includes("API Key") || msg.includes("API_KEY")) {
+          setIsApiKeyModalOpen(true);
+        }
+        showToast(msg, "error");
+      }
+
+      if (i < questionsToAnalyze.length - 1) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    setReanalyzingSessionId(null);
+    setReanalyzingProgress(null);
+
+    if (succeeded > 0 && failed === 0) {
+      sound.playSuccess();
+      showToast(
+        `Analisis ulang berhasil! Seluruh (${succeeded}) butir jawaban siswa "${targetSession.namaSiswa || "Siswa"}" telah dievaluasi ulang oleh AI.`,
+        "success"
+      );
+    } else if (succeeded > 0) {
+      sound.playWarning();
+      showToast(
+        `Analisis ulang selesai: ${succeeded} butir berhasil dievaluasi, ${failed} butir terkendala.`,
+        "warning"
+      );
+    } else {
+      sound.playWarning();
+      showToast("Gagal melakukan analisis ulang. Silakan periksa koneksi atau API Key Anda.", "error");
+    }
+  };
+
   // Export current session to Excel
   const handleExportCurrentToExcel = () => {
     sound.playSuccess();
@@ -834,6 +947,9 @@ export default function App() {
                   }, "download_report")
                 }
                 onRequireLicense={requireLicenseOrRun}
+                onReanalyzeSession={handleReanalyzeHistorySession}
+                reanalyzingSessionId={reanalyzingSessionId}
+                reanalyzingProgress={reanalyzingProgress}
               />
             </motion.div>
           )}
