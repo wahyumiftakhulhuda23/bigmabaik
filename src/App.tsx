@@ -22,6 +22,7 @@ import {
   markFirstVisitShown,
 } from "./utils/license";
 import { exportSessionsToExcel } from "./utils/excelExport";
+import { safeFetchJson } from "./utils/apiHelper";
 import { CheckCircle2, AlertCircle, Info, X, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { sound } from "./utils/audio";
@@ -362,7 +363,7 @@ export default function App() {
     setAnalyzingMap((prev) => ({ ...prev, [soal.id]: true }));
 
     try {
-      const response = await fetch("/api/analyze-single", {
+      const data = await safeFetchJson<{ result: any }>("/api/analyze-single", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -378,14 +379,6 @@ export default function App() {
           apiKeys: apiKeys,
         }),
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        if (data.error && data.error.includes("API Key")) {
-          setIsApiKeyModalOpen(true);
-        }
-        throw new Error(data.error || "Gagal menganalisis jawaban soal ini.");
-      }
 
       setSession((prev) => {
         const nextSoalList = prev.soalList.map((s) =>
@@ -406,6 +399,9 @@ export default function App() {
     } catch (err: any) {
       console.error("Gagal analisis soal:", err);
       let msg = err.message || "Terjadi kendala saat menganalisis.";
+      if (msg.includes("API Key") || msg.includes("API_KEY")) {
+        setIsApiKeyModalOpen(true);
+      }
       if (msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE")) {
         msg = "Server Google AI sedang mengalami lonjakan beban sementara (503). Silakan coba kembali.";
       }
@@ -438,7 +434,7 @@ export default function App() {
         jawabanGambarMimeType: s.jawabanGambarMimeType,
       }));
 
-      const response = await fetch("/api/analyze-batch", {
+      const data = await safeFetchJson<{ results: any[] }>("/api/analyze-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -447,16 +443,8 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        if (data.error && data.error.includes("API Key")) {
-          setIsApiKeyModalOpen(true);
-        }
-        throw new Error(data.error || "Gagal melakukan analisis massal.");
-      }
-
       const resultsMap: Record<string, any> = {};
-      data.results.forEach((r: any) => {
+      (data.results || []).forEach((r: any) => {
         resultsMap[r.soalId] = r;
       });
 

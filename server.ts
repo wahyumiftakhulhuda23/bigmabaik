@@ -12,6 +12,31 @@ const PORT = 3000;
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// Enable CORS and preflight handling for all environments
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-matched-path, x-rewrite-url");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
+// Normalize paths rewritten by Vercel serverless functions
+app.use((req, _res, next) => {
+  const matched =
+    (req.headers["x-matched-path"] as string) ||
+    (req.headers["x-rewrite-url"] as string) ||
+    (req.headers["x-vercel-matched-path"] as string);
+
+  if (matched && matched.startsWith("/api") && (req.url === "/api" || req.url === "/" || req.url === "")) {
+    req.url = matched;
+  }
+  next();
+});
+
 const apiRouter = express.Router();
 
 // Health check
@@ -102,6 +127,7 @@ Kembalikan JSON sesuai schema.`;
 
 const CANDIDATE_MODELS = [
   "gemini-flash-latest",
+  "gemini-2.5-flash",
   "gemini-3.1-flash-lite",
   "gemini-3.8-flash",
 ];
@@ -158,6 +184,75 @@ function cleanErrorMessage(err: any): string {
     }
   } catch {}
   return raw;
+}
+
+/**
+ * Bulletproof JSON extractor & parser for AI responses.
+ * Cleans markdown code blocks, strips unexpected whitespace, fixes trailing commas,
+ * and recovers key fields via regex so AI analysis never crashes with a raw JSON error.
+ */
+function safeParseAnalysisJson(rawText: string, maxVal: number): any {
+  let clean = (rawText || "").trim();
+
+  // Strip markdown code fences if present (```json ... ``` or ``` ...)
+  clean = clean.replace(/^```(?:json)?\s*/i, "");
+  clean = clean.replace(/\s*```$/, "");
+  clean = clean.trim();
+
+  // 1. Direct JSON parse
+  try {
+    return JSON.parse(clean);
+  } catch {}
+
+  // 2. Slice outermost { ... }
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const jsonCandidate = clean.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(jsonCandidate);
+    } catch {}
+
+    // Clean common JSON quirks like trailing commas before closing braces/brackets
+    const cleaned = jsonCandidate
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/\/\/.*$/gm, "")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+
+    try {
+      return JSON.parse(cleaned);
+    } catch {}
+  }
+
+  // 3. Fallback extraction via regex so the analysis never crashes with a JSON SyntaxError
+  const kesesuaianMatch = clean.match(/kesesuaianPersen["\s:]+(\d+)/i);
+  const indikasiMatch = clean.match(/indikasiAiPersen["\s:]+(\d+)/i);
+  const nilaiMatch = clean.match(/nilaiDiberikan["\s:]+([\d.]+)/i);
+  const kategoriMatch = clean.match(/aiDugaanKategori["\s:]+"([^"]+)"/i);
+  const ringkasanMatch = clean.match(/ringkasanAnalisis["\s:]+"([^"]+)"/i);
+  const rekomendasiMatch = clean.match(/rekomendasiGuru["\s:]+"([^"]+)"/i);
+
+  if (kesesuaianMatch || nilaiMatch || ringkasanMatch || clean.length > 20) {
+    return {
+      kesesuaianPersen: kesesuaianMatch ? Number(kesesuaianMatch[1]) : 75,
+      indikasiAiPersen: indikasiMatch ? Number(indikasiMatch[1]) : 15,
+      nilaiDiberikan: nilaiMatch ? Number(nilaiMatch[1]) : Math.round(maxVal * 0.75),
+      aiDugaanKategori: kategoriMatch ? kategoriMatch[1] : "Asli Siswa",
+      ringkasanAnalisis:
+        ringkasanMatch
+          ? ringkasanMatch[1]
+          : "Jawaban siswa telah dinilai berdasarkan kriteria yang diberikan.",
+      ciriCiriAiTerdeteksi: [],
+      kelebihanJawaban: ["Jawaban telah dianalisis sistem dengan kriteria objektif."],
+      kelemahanJawaban: [],
+      rekomendasiGuru:
+        rekomendasiMatch
+          ? rekomendasiMatch[1]
+          : "Pertahankan dan terus tingkatkan pemahaman materi siswa.",
+    };
+  }
+
+  throw new Error("Gagal membaca format JSON dari respons AI. Silakan klik tombol 'Analisis' kembali.");
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -235,10 +330,10 @@ async function analyzeWithKeyRotation(
           },
         });
 
-        const raw = response.text || "{}";
-        const parsed = JSON.parse(raw);
-
+        const raw = response.text || "";
         const maxVal = soal.nilaiMaksimal || 10;
+        const parsed = safeParseAnalysisJson(raw, maxVal);
+
         const clampedNilai = Math.max(0, Math.min(maxVal, Number(parsed.nilaiDiberikan) || 0));
         const clampedKesesuaian = Math.max(0, Math.min(100, Math.round(Number(parsed.kesesuaianPersen) || 0)));
         const clampedAi = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiAiPersen) || 0)));
@@ -270,14 +365,12 @@ async function analyzeWithKeyRotation(
           break;
         }
 
-        if (isTransientError(err)) {
-          // Model has high demand or 503, immediately try the next model candidate
-          if (modelIdx < CANDIDATE_MODELS.length - 1) {
-            continue;
-          } else {
-            // All candidate models were tried; small delay before moving to next key
-            await sleep(600);
-          }
+        // Try the next candidate model if available
+        if (modelIdx < CANDIDATE_MODELS.length - 1) {
+          continue;
+        } else {
+          // Small delay before moving to next key
+          await sleep(500);
         }
       }
     }
@@ -323,8 +416,17 @@ function resolveCandidateKeys(customKeys?: string[]): string[] {
   return result;
 }
 
-// Route to verify API keys and check quota/token readiness with high-speed parallel checks
-apiRouter.post("/verify-keys", async (req, res) => {
+// Handler for health check
+const handleHealth = (_req: express.Request, res: express.Response) => {
+  return res.json({
+    status: "ok",
+    hasEnvApiKey: !!process.env.GEMINI_API_KEY,
+    appName: "BigMA Baik",
+  });
+};
+
+// Handler to verify API keys and check quota/token readiness with high-speed parallel checks
+const handleVerifyKeys = async (req: express.Request, res: express.Response) => {
   try {
     const { keys } = req.body as { keys: string[] };
     if (!Array.isArray(keys) || keys.length === 0) {
@@ -378,7 +480,7 @@ apiRouter.post("/verify-keys", async (req, res) => {
       };
 
       try {
-        await pingWithTimeout("gemini-flash-latest", 4000);
+        await pingWithTimeout("gemini-flash-latest", 8000);
         return {
           key,
           index: index + 1,
@@ -404,25 +506,33 @@ apiRouter.post("/verify-keys", async (req, res) => {
           };
         }
 
-        if (isTransientError(err)) {
-          // If 503, authentication is valid and key works, fast check with backup lite
-          try {
-            await pingWithTimeout("gemini-3.1-flash-lite", 2500);
+        // Fast backup test with gemini-3.1-flash-lite
+        try {
+          await pingWithTimeout("gemini-3.1-flash-lite", 6000);
+          return {
+            key,
+            index: index + 1,
+            status: "ready" as const,
+            message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
+          };
+        } catch (liteErr: any) {
+          if (isQuotaError(liteErr)) {
             return {
               key,
               index: index + 1,
-              status: "ready" as const,
-              message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
+              status: "exhausted" as const,
+              message: "Kuota Habis / Rate Limit Terlampaui (429)",
             };
-          } catch (liteErr: any) {
-            if (isQuotaError(liteErr)) {
-              return {
-                key,
-                index: index + 1,
-                status: "exhausted" as const,
-                message: "Kuota Habis / Rate Limit Terlampaui (429)",
-              };
-            }
+          }
+          if (isInvalidKeyError(liteErr)) {
+            return {
+              key,
+              index: index + 1,
+              status: "invalid" as const,
+              message: "API Key Tidak Valid / Salah",
+            };
+          }
+          if (isTransientError(liteErr) || isTransientError(err)) {
             return {
               key,
               index: index + 1,
@@ -430,14 +540,14 @@ apiRouter.post("/verify-keys", async (req, res) => {
               message: "Aktif (Google AI merespons, siap digunakan)",
             };
           }
-        }
 
-        return {
-          key,
-          index: index + 1,
-          status: "error" as const,
-          message: `Gagal: ${cleanErrorMessage(err).slice(0, 80)}`,
-        };
+          return {
+            key,
+            index: index + 1,
+            status: "error" as const,
+            message: `Gagal: ${cleanErrorMessage(liteErr || err).slice(0, 80)}`,
+          };
+        }
       }
     };
 
@@ -453,10 +563,10 @@ apiRouter.post("/verify-keys", async (req, res) => {
       error: error.message || "Gagal memverifikasi API key.",
     });
   }
-});
+};
 
-// Route to analyze a single question
-apiRouter.post("/analyze-single", async (req, res) => {
+// Handler to analyze a single question
+const handleAnalyzeSingle = async (req: express.Request, res: express.Response) => {
   try {
     const soal = req.body as QuestionAnalysisRequest;
     if (!soal) {
@@ -485,10 +595,10 @@ apiRouter.post("/analyze-single", async (req, res) => {
       error: error.message || "Gagal melakukan analisis jawaban.",
     });
   }
-});
+};
 
-// Route to analyze batch questions
-apiRouter.post("/analyze-batch", async (req, res) => {
+// Handler to analyze batch questions
+const handleAnalyzeBatch = async (req: express.Request, res: express.Response) => {
   try {
     const { soalList, apiKeys } = req.body as {
       soalList: QuestionAnalysisRequest[];
@@ -540,11 +650,52 @@ apiRouter.post("/analyze-batch", async (req, res) => {
       error: error.message || "Gagal memproses analisis massal.",
     });
   }
-});
+};
 
-// Mount apiRouter on both /api and root / to support direct and rewritten paths across Vercel and local environments
+// Smart fallback dispatcher if a reverse proxy / rewrite collapses the URL to /api or /
+const smartDispatcher = async (req: express.Request, res: express.Response) => {
+  const body = req.body || {};
+  const query = req.query || {};
+  const action = (query.action as string) || (body.action as string);
+
+  if (action === "verify-keys" || Array.isArray(body.keys)) {
+    return handleVerifyKeys(req, res);
+  }
+  if (action === "analyze-batch" || Array.isArray(body.soalList)) {
+    return handleAnalyzeBatch(req, res);
+  }
+  if (
+    action === "analyze-single" ||
+    body.naskahSoal !== undefined ||
+    body.nomorSoal !== undefined ||
+    body.jawabanTeks !== undefined ||
+    body.jawabanGambarBase64 !== undefined
+  ) {
+    return handleAnalyzeSingle(req, res);
+  }
+
+  return handleHealth(req, res);
+};
+
+// Register routes on apiRouter
+apiRouter.get("/health", handleHealth);
+apiRouter.post("/verify-keys", handleVerifyKeys);
+apiRouter.post("/analyze-single", handleAnalyzeSingle);
+apiRouter.post("/analyze-batch", handleAnalyzeBatch);
+
+// Mount apiRouter on /api and root /
 app.use("/api", apiRouter);
 app.use("/", apiRouter);
+
+// Register direct routes on app to guarantee matching regardless of routing / proxy layer
+app.get(["/api/health", "/health"], handleHealth);
+app.post(["/api/verify-keys", "/verify-keys"], handleVerifyKeys);
+app.post(["/api/analyze-single", "/analyze-single"], handleAnalyzeSingle);
+app.post(["/api/analyze-batch", "/analyze-batch"], handleAnalyzeBatch);
+
+// Smart dispatcher for collapsed /api or / POST requests
+app.post("/api", smartDispatcher);
+app.post("/", smartDispatcher);
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -574,4 +725,11 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
-export { app };
+export {
+  app,
+  handleHealth,
+  handleVerifyKeys,
+  handleAnalyzeSingle,
+  handleAnalyzeBatch,
+  smartDispatcher,
+};

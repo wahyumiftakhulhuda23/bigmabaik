@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { getStoredApiKeysRaw, saveStoredApiKeys, getStoredApiKeys } from "../utils/storage";
 import { sound } from "../utils/audio";
+import { safeFetchJson } from "../utils/apiHelper";
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -65,17 +66,12 @@ export default function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyMo
     setGeneralError(null);
 
     try {
-      const response = await fetch("/api/verify-keys", {
+      const data = await safeFetchJson<{ results?: KeyCheckResult[] }>("/api/verify-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys: detectedKeys }),
       });
 
-      if (!response.ok) {
-        throw new Error("Gagal memeriksa ke server.");
-      }
-
-      const data = await response.json();
       const resultsMap: Record<string, KeyCheckResult> = {};
 
       if (data.results && Array.isArray(data.results)) {
