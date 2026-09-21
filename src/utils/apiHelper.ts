@@ -23,10 +23,11 @@ export async function safeFetchJson<T = any>(
     try {
       data = JSON.parse(rawText);
     } catch {
-      // If server returned HTML 404 or 500 page instead of JSON
       if (!response.ok) {
+        const stripped = rawText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        const snippet = stripped ? `: "${stripped.slice(0, 100)}"` : "";
         throw new Error(
-          `Server mengembalikan galat HTTP ${response.status} (${response.statusText || "Error"}). Endpoint: ${url}`
+          `Server mengembalikan galat HTTP ${response.status}${snippet}. Endpoint: ${url}`
         );
       }
       throw new Error("Respons server bukan format JSON yang valid.");
