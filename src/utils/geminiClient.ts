@@ -33,40 +33,37 @@ const COMPACT_SYSTEM_PROMPT = `Anda adalah sistem penilai & auditor forensik int
 TUGAS UTAMA: 
 1. Evaluasi ketepatan, keselarasan, dan kebenaran materi jawaban siswa terhadap soal & kunci jawaban secara objektif.
 2. Lakukan audit forensik SUPER KETAT thd indikasi AI (ChatGPT/Gemini/Claude/DeepSeek, termasuk AI yang disusun ulang, diparafrasa, atau dicopas hibrida) serta plagiarisme web (Brainly, Roboguru, Wikipedia, modul ajar).
-3. HUKUM MATEMATIS KORELASI NILAI & KESESUAIAN:
+3. HUKUM MATEMATIS KORELASI NILAI & KESESUAIAN (ATURAN SETENGAH POIN & FAKTOR PENGURANG):
    - kesesuaianPersen (0-100%) merepresentasikan persentase ketepatan materi terhadap soal.
-   - JIKA kesesuaianPersen = 0% -> nilaiDiberikan WAJIB 0 (misal: 0/20).
-   - JIKA kesesuaianPersen = 20% dari soal 20 poin -> Nilai Dasar maksimal = (20/100)*20 = 4 poin (DILARANG KERAS memberikan 15/20!).
-   - Nilai per soal (nilaiDiberikan) = (kesesuaianPersen / 100) * nilaiMaksimal * (1 - Total Penalti Integritas).
+   - JIKA kesesuaianPersen < 50% (tidak sesuai/melenceng), maka Nilai Dasar TIDAK BOLEH MELEBIHI SETENGAH NILAI MAKSIMAL (< 0.5 * nilaiMaksimal).
+   - JIKA kesesuaianPersen = 0% -> Nilai WAJIB 0.0 (misal: 0/20).
+   - JIKA kesesuaianPersen = 20% dari soal 20 poin -> Nilai Dasar kotor = (20/100)*20 = 4.0 poin (DILARANG KERAS memberikan 15/20!).
+   - FAKTOR PENGURANG NILAI (PENALTI INTEGRITAS):
+     * Indikasi AI (ChatGPT/LLM): Memotong skor dari Nilai Dasar kotor (10% s.d. 75% pemotongan).
+     * Plagiarisme Web: Memotong skor dari Nilai Dasar kotor (10% s.d. 50% pemotongan).
+   - Total Nilai Akhir = Nilai Dasar kotor - Potongan AI - Potongan Plagiarisme.
 
 PRINSIP EVALUASI & FORENSIK INTEGRITAS:
 1. SINKRONISASI KESESUAIAN & JAWABAN TIDAK NYAMBUNG / MELENCENG:
    - JAWABAN SINKRON & TEPAT (85% - 100%): Konsep benar, istilah materi akurat, dan menjawab tuntas pertanyaan soal.
    - JAWABAN SEBAGIAN BENAR (40% - 75%): Konsep pokok tersinggung namun ada langkah/istilah penting yang terlewat atau kurang lengkap.
-   - JAWABAN TIDAK SINKRON / SALAH TOTAL / MELENCENG (0% - 30%): 
-     * Berikan kesesuaianPersen RENDAH (0% - 30%).
+   - JAWABAN TIDAK SINKRON / SALAH TOTAL / MELENCENG (0% - 35%): 
+     * Berikan kesesuaianPersen RENDAH (0% - 35%). Nilai dasar maksimal hanya (kesesuaianPersen/100)*nilaiMaksimal (kurang dari setengah nilai total).
      * Pada ringkasanAnalisis dan kelemahanJawaban: BEDAH SECARA DETAIL letak ketidaksinkronannya! Jelaskan apa yang diminta pertanyaan soal vs apa yang ditulis siswa, dan tunjukkan mengapa jawaban tersebut melenceng/tidak relevan.
      * Pada rekomendasiGuru: Berikan saran remedial spesifik untuk membedah kata kunci soal dan meluruskan konsep yang keliru.
 
-2. AUDIT FORENSIK AI SUPER SENSITIF & KETAT (JANGAN MUDAH MENILAI ASLI / ORIGINAL):
+2. AUDIT FORENSIK AI SUPER SENSITIF & KETAT (PENGURANGAN POIN):
    - Waspadai ciri-ciri khas teks hasil AI:
      * Diksi akademis sintetis/terjemahan kaku: "secara komprehensif", "memiliki peran fundamental", "esensial", "krusial", "urgensi", "mengejawantahkan", "lanskap digital", "dalam konteks ini", "penting untuk digarisbawahi".
      * Struktur kalimat robotik & simetris: Kalimat pembuka klise ("Tentu, berikut adalah...", "Secara umum..."), pemaparan poin ber-bold simetris, dan kesimpulan baku ("Dengan demikian...", "Dapat disimpulkan bahwa...").
-     * Pola hibrida / parafrasa: Siswa menulis 1 kalimat sendiri lalu menyalin poin AI -> DETEKSI sebagai "Campuran AI" (30%-50%) atau "Didominasi AI" (55%-75%).
-   - Hanya beri label "Asli Siswa" (<15% AI) jika gaya bahasa benar-benar alami, menggunakan kosakata khas siswa, ada variasi penalaran personal, atau ketidaksempurnaan khas pengerjaan mandiri.
+     * Pola hibrida / parafrasa: Siswa menulis 1 kalimat sendiri lalu menyalin poin AI -> DETEKSI sebagai "Campuran AI" (25%-50%) atau "Didominasi AI" (51%-79%) dan kurangi poinnya!
+   - Hanya beri label "Asli Siswa" (<15% AI) jika gaya bahasa benar-benar alami siswa.
 
-3. DETEKSI PLAGIARISME WEB & MODUL:
+3. DETEKSI PLAGIARISME WEB & MODUL (PENGURANGAN POIN):
    - Deteksi kemiripan teks/definisi baku dengan sumber web (Brainly, Roboguru, Ruangguru, Zenius, Wikipedia, CoLearn, Modul Kemdikbud).
-   - Jika terindikasi copy-paste web, naikkan indikasiPlagiarismePersen (35%-80%), kategorikan sebagai "Terindikasi Plagiat Web" atau "Kemiripan Sedang", sebutkan sumber di indikasiSumberPlagiarisme, dan jelaskan bagian yang mirip di detailPlagiarisme.
+   - Jika terindikasi copy-paste web, naikkan indikasiPlagiarismePersen (35%-80%), kategorikan sebagai "Terindikasi Plagiat Web" atau "Kemiripan Sedang", sebutkan sumber di indikasiSumberPlagiarisme, dan kurangi poinnya!
 
-4. PENALTI INTEGRITAS TERHADAP NILAI:
-   - Murni AI (≥80%): Potong 70%-80% dari nilai dasar materi.
-   - Didominasi AI (51%-79%): Potong 40%-55% dari nilai dasar materi.
-   - Campuran AI (25%-50%): Potong 20%-35% dari nilai dasar materi.
-   - Terindikasi Plagiat Web (>50%): Potong 40%-60% dari nilai dasar materi.
-   - Kemiripan Sedang Plagiat (25%-50%): Potong 15%-30% dari nilai dasar materi.
-
-5. DILARANG KERAS MENGGUNAKAN KALIMAT KLISE / TEMPLATE:
+4. DILARANG KERAS MENGGUNAKAN KALIMAT KLISE / TEMPLATE:
    - DILARANG menulis kalimat шаблон seperti "Jawaban siswa telah dinilai berdasarkan kriteria" atau "Pertahankan dan terus tingkatkan pemahaman".
    - Setiap ulasan dan rekomendasi WAJIB unik, membedah istilah materi, rumus, langkah pengerjaan, atau kutipan kalimat siswa pada soal ini.
 
@@ -457,36 +454,52 @@ export async function analyzeSingleQuestion(soal: QuestionAnalysisRequest): Prom
           clampedAi = Math.max(clampedAi, 85);
         }
 
-        // Kalkulasi Penalti Integritas (AI & Plagiarisme mengurangi nilai)
-        // Nilai dasar mutlak dihitung langsung dari tingkat kesesuaian materi
-        const baseScore = (clampedKesesuaian / 100) * maxVal;
+        // Kalkulasi Penalti Integritas & Rincian Transparan Nilai
+        // 1. Nilai dasar materi mutlak: jika kesesuaian < 50%, nilai dasar otomatis < 50% nilai maksimal
+        const rawBaseScore = (clampedKesesuaian / 100) * maxVal;
+        const nilaiDasarMateri = Math.round(rawBaseScore * 10) / 10;
+
         let aiPenaltyRatio = 0;
         if (clampedAi >= 80) aiPenaltyRatio = 0.75;
         else if (clampedAi >= 51) aiPenaltyRatio = 0.50;
         else if (clampedAi >= 25) aiPenaltyRatio = 0.25;
-        else if (clampedAi >= 10) aiPenaltyRatio = 0.10;
+        else aiPenaltyRatio = 0; // Bantuan AI Ringan (<25%): Pemotongan 0%
 
         let plagiatPenaltyRatio = 0;
         if (clampedPlagiat > 60) plagiatPenaltyRatio = 0.50;
         else if (clampedPlagiat > 30) plagiatPenaltyRatio = 0.25;
-        else if (clampedPlagiat > 15) plagiatPenaltyRatio = 0.10;
+        else plagiatPenaltyRatio = 0; // Rendah (<=30%): Pemotongan 0%
 
-        const totalPenaltyRatio = Math.min(0.90, aiPenaltyRatio + (plagiatPenaltyRatio * 0.7));
-        const maxAllowedScore = baseScore * (1 - totalPenaltyRatio);
+        const potonganAiPoin = Math.round((nilaiDasarMateri * aiPenaltyRatio) * 10) / 10;
+        const potonganPlagiatPoin = Math.round((nilaiDasarMateri * plagiatPenaltyRatio) * 10) / 10;
+        const totalPotongan = Math.min(nilaiDasarMateri, Math.round((potonganAiPoin + potonganPlagiatPoin) * 10) / 10);
 
         let finalScore = 0;
         if (clampedKesesuaian === 0) {
           finalScore = 0;
         } else {
-          let parsedNilai = Number(parsed.nilaiDiberikan);
-          if (isNaN(parsedNilai) || parsedNilai < 0) {
-            finalScore = maxAllowedScore;
-          } else {
-            // Nilai tidak boleh melebihi batas atas materi dan penalti integritas
-            finalScore = Math.min(parsedNilai, maxAllowedScore);
-          }
+          finalScore = Math.max(0, Math.round((nilaiDasarMateri - totalPotongan) * 10) / 10);
         }
-        const clampedNilai = Math.max(0, Math.min(maxVal, Math.round(finalScore * 10) / 10));
+        const clampedNilai = Math.max(0, Math.min(maxVal, finalScore));
+
+        // Buat penjelasan faktor pengurang yang sangat detail dan transparan
+        let penjelasanFaktor = "";
+        if (clampedKesesuaian === 0) {
+          penjelasanFaktor = `Nilai 0.0/${maxVal}: Jawaban dinilai tidak sesuai/melenceng total (Kesesuaian 0%).`;
+        } else {
+          const faktorList: string[] = [];
+          faktorList.push(`Nilai Dasar Materi: ${nilaiDasarMateri}/${maxVal} (berdasarkan Kesesuaian ${clampedKesesuaian}%)`);
+          if (potonganAiPoin > 0) {
+            faktorList.push(`Pengurangan AI: -${potonganAiPoin} poin (Indikasi AI ${clampedAi}% - ${aiKategori})`);
+          }
+          if (potonganPlagiatPoin > 0) {
+            faktorList.push(`Pengurangan Plagiarisme: -${potonganPlagiatPoin} poin (Kemiripan Web ${clampedPlagiat}% - ${plagiatKategori})`);
+          }
+          if (potonganAiPoin === 0 && potonganPlagiatPoin === 0) {
+            faktorList.push(`Tanpa Penalti Integritas (Jawaban orisinal & bebas plagiat)`);
+          }
+          penjelasanFaktor = `${faktorList.join(" | ")} → Total Nilai Akhir: ${clampedNilai}/${maxVal} poin.`;
+        }
 
         const ciriAi = Array.isArray(parsed.ciriCiriAiTerdeteksi) && parsed.ciriCiriAiTerdeteksi.length > 0
           ? parsed.ciriCiriAiTerdeteksi
@@ -511,6 +524,12 @@ export async function analyzeSingleQuestion(soal: QuestionAnalysisRequest): Prom
               : "Rangkaian kata dan penjelasan tergolong alami dan orisinal dari pemahaman siswa."),
           nilaiDiberikan: Math.round(clampedNilai * 10) / 10,
           nilaiMaksimal: maxVal,
+          rincianKalkulasiNilai: {
+            nilaiDasarMateri,
+            potonganAiPoin,
+            potonganPlagiarismePoin: potonganPlagiatPoin,
+            penjelasanFaktorPengurang: penjelasanFaktor,
+          },
           aiDugaanKategori: aiKategori,
           ringkasanAnalisis: parsed.ringkasanAnalisis || "Evaluasi jawaban pada nomor ini telah diselesaikan.",
           ciriCiriAiTerdeteksi: ciriAi,

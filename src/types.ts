@@ -1,3 +1,10 @@
+export interface RincianKalkulasiNilai {
+  nilaiDasarMateri: number; // Nilai kotor berdasarkan kesesuaian materi (kesesuaianPersen / 100) * nilaiMaksimal
+  potonganAiPoin: number; // Poin pengurangan karena terindikasi AI
+  potonganPlagiarismePoin: number; // Poin pengurangan karena plagiarisme
+  penjelasanFaktorPengurang: string; // Penjelasan terurai rinci faktor pengurang dan asal usul nilai akhir
+}
+
 export interface AnalisisHasil {
   soalId: string;
   nomorSoal: number;
@@ -9,6 +16,7 @@ export interface AnalisisHasil {
   detailPlagiarisme?: string; // Uraian kemiripan teks thd sumber internet vs kata-kata asli siswa
   nilaiDiberikan: number; // 0 - nilaiMaksimal
   nilaiMaksimal: number;
+  rincianKalkulasiNilai?: RincianKalkulasiNilai;
   aiDugaanKategori: string;
   ringkasanAnalisis: string;
   ciriCiriAiTerdeteksi: string[];
@@ -16,6 +24,9 @@ export interface AnalisisHasil {
   kelemahanJawaban: string[];
   rekomendasiGuru: string;
   analyzedAt: string;
+  isManualOverride?: boolean; // True jika nilai disesuaikan/diedit manual oleh guru
+  nilaiOtomatisSebelumOverride?: number; // Nilai asli dari AI sebelum diubah manual
+  catatanPenyesuaianGuru?: string; // Catatan khusus guru mengapa nilai disesuaikan manual
 }
 
 export interface SoalItem {

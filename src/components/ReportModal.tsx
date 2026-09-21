@@ -864,9 +864,25 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                                 <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: "2px" }}>
                                   AI: {soal.analisis.aiDugaanKategori} • Web: {soal.analisis.plagiarismeKategori || "Bebas"}
                                 </div>
-                                <div style={{ color: "#475569" }}>
+                                <div style={{ color: "#475569", marginBottom: "3px" }}>
                                   {soal.analisis.ringkasanAnalisis}
                                 </div>
+                                {soal.analisis.rincianKalkulasiNilai?.penjelasanFaktorPengurang && (
+                                  <div
+                                    style={{
+                                      fontSize: "8.5px",
+                                      color: "#4338ca",
+                                      backgroundColor: "#f5f3ff",
+                                      padding: "3px 5px",
+                                      borderRadius: "4px",
+                                      border: "1px solid #ddd6fe",
+                                      marginTop: "3px",
+                                    }}
+                                  >
+                                    <strong>Kalkulasi Skor: </strong>
+                                    {soal.analisis.rincianKalkulasiNilai.penjelasanFaktorPengurang}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span style={{ color: "#94a3b8", fontStyle: "italic" }}>

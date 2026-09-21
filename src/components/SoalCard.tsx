@@ -17,6 +17,11 @@ import {
   RotateCcw,
   Globe,
   HelpCircle,
+  Calculator,
+  Edit3,
+  SlidersHorizontal,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SoalItem } from "../types";
@@ -51,6 +56,100 @@ export default function SoalCard({
 
   const questionFileInputRef = useRef<HTMLInputElement>(null);
   const answerFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isEditingScore, setIsEditingScore] = useState(false);
+  const [customScoreInput, setCustomScoreInput] = useState<number | string>(() => {
+    return soal.analisis ? soal.analisis.nilaiDiberikan : soal.nilaiMaksimal;
+  });
+  const [customReasonInput, setCustomReasonInput] = useState<string>(() => {
+    return soal.analisis?.catatanPenyesuaianGuru || "";
+  });
+
+  const handleOpenScoreEditor = () => {
+    sound.playTabClick();
+    setCustomScoreInput(soal.analisis ? soal.analisis.nilaiDiberikan : soal.nilaiMaksimal);
+    setCustomReasonInput(soal.analisis?.catatanPenyesuaianGuru || "");
+    setIsEditingScore(true);
+  };
+
+  const handleSaveManualScore = () => {
+    sound.playSuccess();
+    const rawNum = typeof customScoreInput === "string" ? parseFloat(customScoreInput) : customScoreInput;
+    const validNum = isNaN(rawNum) ? (soal.analisis?.nilaiDiberikan ?? 0) : rawNum;
+    const clampedScore = Math.max(0, Math.min(soal.nilaiMaksimal, Math.round(validNum * 10) / 10));
+
+    if (soal.analisis) {
+      const originalAiScore = soal.analisis.nilaiOtomatisSebelumOverride ?? soal.analisis.nilaiDiberikan;
+      const nextAnalisis = {
+        ...soal.analisis,
+        nilaiDiberikan: clampedScore,
+        isManualOverride: true,
+        nilaiOtomatisSebelumOverride: originalAiScore,
+        catatanPenyesuaianGuru: customReasonInput.trim() || undefined,
+      };
+      onUpdate({
+        analisis: nextAnalisis,
+        isSaved: true,
+      });
+    } else {
+      const nextAnalisis = {
+        soalId: soal.id,
+        nomorSoal: soal.nomorSoal,
+        kesesuaianPersen: Math.round((clampedScore / Math.max(1, soal.nilaiMaksimal)) * 100),
+        indikasiAiPersen: 0,
+        indikasiPlagiarismePersen: 0,
+        plagiarismeKategori: "Bebas Plagiasi",
+        nilaiDiberikan: clampedScore,
+        nilaiMaksimal: soal.nilaiMaksimal,
+        rincianKalkulasiNilai: {
+          nilaiDasarMateri: clampedScore,
+          potonganAiPoin: 0,
+          potonganPlagiarismePoin: 0,
+          penjelasanFaktorPengurang: `Penilaian manual langsung oleh guru (${clampedScore}/${soal.nilaiMaksimal} poin)${
+            customReasonInput.trim() ? `: ${customReasonInput.trim()}` : ""
+          }`,
+        },
+        aiDugaanKategori: "Manual Guru",
+        ringkasanAnalisis:
+          customReasonInput.trim() ||
+          `Nilai butir soal ini ditentukan secara manual oleh guru (${clampedScore}/${soal.nilaiMaksimal} poin).`,
+        ciriCiriAiTerdeteksi: [],
+        kelebihanJawaban: ["Dinilai langsung oleh guru mata pelajaran."],
+        kelemahanJawaban: [],
+        rekomendasiGuru:
+          customReasonInput.trim() || "Penilaian manual telah disimpan dan diakumulasikan ke rekap nilai sesi.",
+        analyzedAt: new Date().toISOString(),
+        isManualOverride: true,
+        nilaiOtomatisSebelumOverride: clampedScore,
+        catatanPenyesuaianGuru: customReasonInput.trim() || undefined,
+      };
+      onUpdate({
+        analisis: nextAnalisis,
+        isSaved: true,
+      });
+    }
+
+    setIsEditingScore(false);
+    onSave();
+  };
+
+  const handleResetToAiScore = () => {
+    if (!soal.analisis) return;
+    sound.playSuccess();
+    const originalAi = soal.analisis.nilaiOtomatisSebelumOverride ?? soal.analisis.nilaiDiberikan;
+    const nextAnalisis = {
+      ...soal.analisis,
+      nilaiDiberikan: originalAi,
+      isManualOverride: false,
+      catatanPenyesuaianGuru: undefined,
+    };
+    onUpdate({
+      analisis: nextAnalisis,
+      isSaved: true,
+    });
+    setIsEditingScore(false);
+    onSave();
+  };
 
   const handleSaveClick = () => {
     sound.playSuccess();
@@ -275,6 +374,32 @@ export default function SoalCard({
             <span className="text-slate-500 font-medium">Poin</span>
           </div>
 
+          {/* Tombol Edit Nilai Manual */}
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            type="button"
+            onClick={handleOpenScoreEditor}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center space-x-1.5 transition-all cursor-pointer shadow-xs ${
+              isEditingScore
+                ? "bg-indigo-600 text-white border-indigo-500 shadow-indigo-600/30"
+                : soal.analisis?.isManualOverride
+                ? "bg-amber-950/80 hover:bg-amber-900/80 border-amber-700/80 text-amber-300"
+                : "bg-slate-800 hover:bg-slate-750 border-slate-700 text-slate-200"
+            }`}
+            title="Sesuaikan/edit jumlah poin soal ini secara manual dan simpan"
+          >
+            <Edit3 className="h-3.5 w-3.5 text-amber-400" />
+            <span>
+              {soal.analisis ? `Nilai: ${soal.analisis.nilaiDiberikan}/${soal.nilaiMaksimal}` : "Edit Nilai"}
+            </span>
+            {soal.analisis?.isManualOverride && (
+              <span className="text-[10px] bg-amber-900/90 text-amber-200 px-1.5 py-0.2 rounded font-semibold border border-amber-700/60">
+                Manual
+              </span>
+            )}
+          </motion.button>
+
           {/* Tombol Simpan Soal */}
           <motion.button
             whileHover={{ scale: 1.03 }}
@@ -355,6 +480,172 @@ export default function SoalCard({
           </motion.button>
         </div>
       </div>
+
+      {/* Panel Edit Nilai Manual Guru */}
+      <AnimatePresence>
+        {isEditingScore && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -6 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -6 }}
+            transition={{ duration: 0.25 }}
+            className="mt-3.5 p-4 rounded-xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-700/60 shadow-xl text-slate-100"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40">
+                  <Edit3 className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                    Edit Perolehan Poin Manual Guru (Soal #{soal.nomorSoal})
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Guru dapat menentukan total poin akhir secara mandiri dan menyimpannya langsung ke akumulasi nilai sesi.
+                  </p>
+                </div>
+              </div>
+
+              {soal.analisis?.isManualOverride && (
+                <button
+                  type="button"
+                  onClick={handleResetToAiScore}
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Kembalikan ke nilai perhitungan AI semula"
+                >
+                  <RotateCcw className="h-3 w-3 text-indigo-400" />
+                  <span>Reset ke Nilai AI ({soal.analisis.nilaiOtomatisSebelumOverride ?? soal.analisis.nilaiDiberikan})</span>
+                </button>
+              )}
+            </div>
+
+            {/* Form Input Skor & Quick Adjustment */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              {/* Angka Skor Input */}
+              <div className="md:col-span-4">
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Jumlah Poin Diberikan (Maks. {soal.nilaiMaksimal}):
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max={soal.nilaiMaksimal}
+                    value={customScoreInput}
+                    onChange={(e) => setCustomScoreInput(e.target.value)}
+                    className="w-full px-3 py-2 text-base font-extrabold text-indigo-300 bg-slate-950 border border-indigo-500/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <span className="text-xs text-slate-400 font-semibold whitespace-nowrap">
+                    / {soal.nilaiMaksimal} Poin
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Adjustment Buttons */}
+              <div className="md:col-span-8">
+                <span className="text-[10px] text-slate-400 font-medium block mb-1">Penyesuaian Cepat:</span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const curr = typeof customScoreInput === "string" ? parseFloat(customScoreInput) || 0 : customScoreInput;
+                      setCustomScoreInput(Math.min(soal.nilaiMaksimal, Math.max(0, Math.round((curr + 1) * 10) / 10)));
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                  >
+                    +1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const curr = typeof customScoreInput === "string" ? parseFloat(customScoreInput) || 0 : customScoreInput;
+                      setCustomScoreInput(Math.min(soal.nilaiMaksimal, Math.max(0, Math.round((curr + 0.5) * 10) / 10)));
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                  >
+                    +0.5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const curr = typeof customScoreInput === "string" ? parseFloat(customScoreInput) || 0 : customScoreInput;
+                      setCustomScoreInput(Math.max(0, Math.round((curr - 0.5) * 10) / 10));
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                  >
+                    -0.5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const curr = typeof customScoreInput === "string" ? parseFloat(customScoreInput) || 0 : customScoreInput;
+                      setCustomScoreInput(Math.max(0, Math.round((curr - 1) * 10) / 10));
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                  >
+                    -1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomScoreInput(soal.nilaiMaksimal)}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/80 cursor-pointer"
+                  >
+                    Penuh ({soal.nilaiMaksimal})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomScoreInput(Math.round((soal.nilaiMaksimal / 2) * 10) / 10)}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-800/80 cursor-pointer"
+                  >
+                    Setengah ({Math.round((soal.nilaiMaksimal / 2) * 10) / 10})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomScoreInput(0)}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/80 cursor-pointer"
+                  >
+                    Nol (0)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Catatan / Alasan Penyesuaian Guru */}
+            <div className="mt-3">
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Catatan / Alasan Penyesuaian Guru (Opsional):
+              </label>
+              <input
+                type="text"
+                value={customReasonInput}
+                onChange={(e) => setCustomReasonInput(e.target.value)}
+                placeholder="Contoh: Jawaban benar setelah konfirmasi lisan / penalaran alternatif siswa..."
+                className="w-full px-3 py-1.5 text-xs text-slate-200 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Aksi Simpan & Batal */}
+            <div className="flex items-center justify-end gap-2 mt-3.5 pt-2.5 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => setIsEditingScore(false)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveManualScore}
+                className="px-4 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="h-3.5 w-3.5" />
+                <span>Simpan Poin & Perbarui Total</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Konten Grid: Naskah Soal & Jawaban Siswa */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
@@ -538,11 +829,22 @@ export default function SoalCard({
                 {/* Nilai Diberikan */}
                 <div className="px-3 py-1 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-indigo-300 text-xs font-bold flex items-center gap-1.5">
                   <span>Nilai: {soal.analisis.nilaiDiberikan} / {soal.nilaiMaksimal}</span>
-                  {soal.analisis.nilaiDiberikan < Math.round(((soal.analisis.kesesuaianPersen / 100) * soal.nilaiMaksimal) * 10) / 10 && (
+                  {soal.analisis.isManualOverride ? (
+                    <span className="text-[10px] text-amber-300 font-semibold bg-amber-950/90 px-1.5 py-0.5 rounded border border-amber-800/60" title="Nilai ditentukan/disesuaikan secara manual oleh guru">
+                      Disesuaikan Guru
+                    </span>
+                  ) : soal.analisis.nilaiDiberikan < Math.round(((soal.analisis.kesesuaianPersen / 100) * soal.nilaiMaksimal) * 10) / 10 ? (
                     <span className="text-[10px] text-rose-300 font-semibold bg-rose-950/90 px-1.5 py-0.5 rounded border border-rose-800/60" title="Nilai dipotong karena terindikasi AI atau Plagiat">
                       Penalti Integritas
                     </span>
-                  )}
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleOpenScoreEditor}
+                    className="ml-1 text-[11px] text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                  >
+                    Edit
+                  </button>
                 </div>
 
                 {/* Kesesuaian Materi */}
@@ -620,9 +922,168 @@ export default function SoalCard({
               </div>
             )}
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
               {soal.analisis.ringkasanAnalisis}
             </p>
+
+            {/* Rincian Transparansi Kalkulasi Nilai & Faktor Pengurang */}
+            {(() => {
+              const rincian = soal.analisis.rincianKalkulasiNilai || (() => {
+                const base = Math.round(((soal.analisis.kesesuaianPersen / 100) * soal.nilaiMaksimal) * 10) / 10;
+                let aiRatio = 0;
+                if (soal.analisis.indikasiAiPersen >= 80) aiRatio = 0.75;
+                else if (soal.analisis.indikasiAiPersen >= 51) aiRatio = 0.50;
+                else if (soal.analisis.indikasiAiPersen >= 25) aiRatio = 0.25;
+                else aiRatio = 0; // (Bantuan AI Ringan <25%): Pemotongan 0%
+
+                let plagiatRatio = 0;
+                const plagiatPersen = soal.analisis.indikasiPlagiarismePersen || 0;
+                if (plagiatPersen > 60) plagiatRatio = 0.50;
+                else if (plagiatPersen > 30) plagiatRatio = 0.25;
+                else plagiatRatio = 0; // (Rendah <=30%): Pemotongan 0%
+
+                const potAi = Math.round((base * aiRatio) * 10) / 10;
+                const potPlagiat = Math.round((base * plagiatRatio) * 10) / 10;
+                let penjelasan = "";
+                if (soal.analisis.isManualOverride) {
+                  penjelasan = `Nilai disesuaikan manual oleh guru menjadi ${soal.analisis.nilaiDiberikan}/${soal.nilaiMaksimal} poin${
+                    soal.analisis.catatanPenyesuaianGuru ? ` (Catatan: "${soal.analisis.catatanPenyesuaianGuru}")` : ""
+                  }. (Nilai AI semula: ${soal.analisis.nilaiOtomatisSebelumOverride ?? "-"} poin).`;
+                } else if (soal.analisis.kesesuaianPersen === 0) {
+                  penjelasan = `Nilai 0.0/${soal.nilaiMaksimal}: Jawaban tidak sesuai/melenceng total (Kesesuaian 0%).`;
+                } else {
+                  const list = [`Nilai Dasar Materi: ${base}/${soal.nilaiMaksimal} (Kesesuaian ${soal.analisis.kesesuaianPersen}%)`];
+                  if (potAi > 0) list.push(`Pengurangan AI: -${potAi} poin (${soal.analisis.indikasiAiPersen}%)`);
+                  if (potPlagiat > 0) list.push(`Pengurangan Plagiarisme: -${potPlagiat} poin (${plagiatPersen}%)`);
+                  if (potAi === 0 && potPlagiat === 0) list.push(`Tanpa Penalti Integritas (Orisinal & Bebas Plagiasi)`);
+                  penjelasan = `${list.join(" | ")} → Total Nilai Akhir: ${soal.analisis.nilaiDiberikan}/${soal.nilaiMaksimal} poin.`;
+                }
+                return {
+                  nilaiDasarMateri: base,
+                  potonganAiPoin: potAi,
+                  potonganPlagiarismePoin: potPlagiat,
+                  penjelasanFaktorPengurang: penjelasan,
+                };
+              })();
+
+              return (
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-indigo-950 shadow-inner text-xs mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-800 flex-wrap">
+                    <span className="font-bold text-slate-200 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                      <Calculator className="h-3.5 w-3.5 text-indigo-400" />
+                      Rincian Penentuan Poin (Kesesuaian & Penalti Integritas)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleOpenScoreEditor}
+                        className="text-[11px] px-2 py-0.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer"
+                        title="Buka panel untuk mengedit poin secara manual"
+                      >
+                        <Edit3 className="h-3 w-3 text-amber-400" />
+                        <span>Edit Poin Manual</span>
+                      </button>
+                      <span className="font-black text-indigo-300 text-xs">
+                        Nilai Akhir: {soal.analisis.nilaiDiberikan} / {soal.nilaiMaksimal}
+                      </span>
+                    </div>
+                  </div>
+
+                  {soal.analisis.isManualOverride && (
+                    <div className="mb-2.5 p-2 rounded-lg bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs flex items-start gap-2">
+                      <Edit3 className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-300 text-[11px] block">
+                          Nilai Disesuaikan Manual oleh Guru
+                        </span>
+                        <span className="text-[11px] text-amber-200/90 leading-relaxed">
+                          Poin ditetapkan menjadi <b>{soal.analisis.nilaiDiberikan} / {soal.nilaiMaksimal}</b>
+                          {soal.analisis.nilaiOtomatisSebelumOverride !== undefined && ` (Nilai AI semula: ${soal.analisis.nilaiOtomatisSebelumOverride})`}
+                          {soal.analisis.catatanPenyesuaianGuru && ` — Catatan: "${soal.analisis.catatanPenyesuaianGuru}"`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                    {/* Nilai Dasar Materi */}
+                    <div className="p-2 rounded-lg bg-slate-950 border border-slate-800 flex flex-col justify-between">
+                      <span className="text-[10px] text-slate-400 font-medium">1. Nilai Dasar Materi</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="font-bold text-blue-300 text-xs">
+                          {rincian.nilaiDasarMateri} / {soal.nilaiMaksimal}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          ({soal.analisis.kesesuaianPersen}%)
+                        </span>
+                      </div>
+                      {soal.analisis.kesesuaianPersen < 50 && (
+                        <span className="text-[9px] text-rose-300 mt-0.5">
+                          &lt; Setengah poin
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Potongan AI */}
+                    <div className={`p-2 rounded-lg bg-slate-950 border flex flex-col justify-between ${
+                      rincian.potonganAiPoin > 0 ? "border-rose-900/60 bg-rose-950/20" : "border-slate-800"
+                    }`}>
+                      <span className="text-[10px] text-slate-400 font-medium">2. Penalti AI</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className={`font-bold text-xs ${rincian.potonganAiPoin > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                          {rincian.potonganAiPoin > 0 ? `-${rincian.potonganAiPoin} Poin` : "0 (Aman)"}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          ({soal.analisis.indikasiAiPersen}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Potongan Plagiarisme */}
+                    <div className={`p-2 rounded-lg bg-slate-950 border flex flex-col justify-between ${
+                      rincian.potonganPlagiarismePoin > 0 ? "border-purple-900/60 bg-purple-950/20" : "border-slate-800"
+                    }`}>
+                      <span className="text-[10px] text-slate-400 font-medium">3. Penalti Plagiarisme</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className={`font-bold text-xs ${rincian.potonganPlagiarismePoin > 0 ? "text-purple-400" : "text-emerald-400"}`}>
+                          {rincian.potonganPlagiarismePoin > 0 ? `-${rincian.potonganPlagiarismePoin} Poin` : "0 (Aman)"}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          ({soal.analisis.indikasiPlagiarismePersen ?? 0}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Total Skor */}
+                    <div className={`p-2 rounded-lg border flex flex-col justify-between ${
+                      soal.analisis.isManualOverride
+                        ? "bg-amber-950/40 border-amber-700/80"
+                        : "bg-indigo-950/60 border-indigo-800/80"
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-medium ${soal.analisis.isManualOverride ? "text-amber-300" : "text-indigo-300"}`}>
+                          {soal.analisis.isManualOverride ? "Skor Manual Guru" : "Total Skor Diberikan"}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className={`font-extrabold text-sm ${soal.analisis.isManualOverride ? "text-amber-200" : "text-indigo-200"}`}>
+                          {soal.analisis.nilaiDiberikan}
+                        </span>
+                        <span className={`text-[10px] font-semibold ${soal.analisis.isManualOverride ? "text-amber-400" : "text-indigo-400"}`}>
+                          / {soal.nilaiMaksimal} Poin
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Keterangan Terurai Faktor Pengurang */}
+                  <div className="text-[11px] text-slate-300/90 leading-relaxed bg-slate-950/80 p-2 rounded-lg border border-slate-800/70">
+                    <span className="text-slate-400 font-semibold">Uraian Skor: </span>
+                    <span>{rincian.penjelasanFaktorPengurang}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Toggle Detail */}
             <div className="mt-3 pt-2.5 border-t border-slate-800 flex justify-between items-center text-xs">

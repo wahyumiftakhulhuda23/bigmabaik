@@ -325,6 +325,7 @@ export async function exportSessionsToExcel(
       "Kategori AI",
       "Plagiat Web",
       "Kategori Plagiat",
+      "Rincian Kalkulasi & Penalti",
       "Ringkasan Analisis & Integritas",
       "Rekomendasi Guru",
     ];
@@ -369,6 +370,7 @@ export async function exportSessionsToExcel(
         const kategoriAi = soal.analisis ? soal.analisis.aiDugaanKategori : "Belum Dianalisis";
         const plagPersen = soal.analisis ? (soal.analisis.indikasiPlagiarismePersen ?? 0) : 0;
         const kategoriPlag = soal.analisis ? (soal.analisis.plagiarismeKategori || "Bebas") : "-";
+        const rincianText = soal.analisis?.rincianKalkulasiNilai?.penjelasanFaktorPengurang || "-";
         const ringkasan = soal.analisis ? soal.analisis.ringkasanAnalisis : "-";
         const rekomendasi = soal.analisis ? soal.analisis.rekomendasiGuru : "-";
 
@@ -387,6 +389,7 @@ export async function exportSessionsToExcel(
           kategoriAi,
           `${plagPersen}%`,
           kategoriPlag,
+          rincianText,
           ringkasan,
           rekomendasi,
         ];
@@ -481,8 +484,9 @@ export async function exportSessionsToExcel(
       { width: 22 }, // Kategori AI
       { width: 16 }, // Plagiat Web
       { width: 20 }, // Kategori Plagiat
-      { width: 42 }, // Ringkasan
-      { width: 42 }, // Rekomendasi
+      { width: 38 }, // Rincian Kalkulasi & Penalti
+      { width: 38 }, // Ringkasan
+      { width: 38 }, // Rekomendasi
     ];
 
     // Export to Excel buffer and trigger download
