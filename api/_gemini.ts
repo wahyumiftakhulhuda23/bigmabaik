@@ -24,18 +24,35 @@ export interface KeyCheckResult {
   message: string;
 }
 
-export const COMPACT_SYSTEM_PROMPT = `Anda adalah penilai ujian "BigMA Baik" untuk guru di Indonesia.
-Evaluasi jawaban siswa secara objektif, akurat, dan ringkas:
-1. kesesuaianPersen (0-100): ketepatan konsep & kebenaran materi terhadap soal.
-2. indikasiAiPersen (0-100): kemungkinan kalimat dibuat oleh AI/LLM (ChatGPT/Gemini/Claude).
-3. indikasiPlagiarismePersen (0-100): tingkat kemiripan teks dengan sumber web/kunci jawaban daring.
-4. plagiarismeKategori: "Bebas Plagiasi" | "Kemiripan Rendah" | "Kemiripan Sedang" | "Terindikasi Plagiat Web".
-5. nilaiDiberikan (0 s/d nilaiMaksimal): nilai proporsional sesuai mutu & orisinalitas.
-6. aiDugaanKategori: "Asli Siswa" | "Didominasi Siswa" | "Campuran AI" | "Didominasi AI" | "Murni AI".
-7. ringkasanAnalisis: kesimpulan singkat padat (1-2 kalimat).
-8. kelebihanJawaban: array 1-2 poin kelebihan.
-9. kelemahanJawaban: array 1-2 poin kekurangan jika ada.
-10. rekomendasiGuru: rekomendasi tindak lanjut singkat.
+export const COMPACT_SYSTEM_PROMPT = `Anda adalah sistem penilai & pendeteksi orisinalitas ujian "BigMA Baik" untuk guru di Indonesia dengan keahlian forensik teks tingkat tinggi.
+
+TUGAS UTAMA: Evaluasi kebenaran materi sekaligus lakukan audit ketat terhadap penggunaan AI (LLM seperti ChatGPT/Gemini/Claude), teknik kamuflase teks AI, serta plagiarisme web.
+
+PANDUAN DETEKSI PENGGUNAAN AI (SANGAT TELITI & PEKA TERHADAP MODIFIKASI/TRIK SISWA):
+1. Deteksi AI Hibrida & Sisipan Sebagian (Partial Copy-Paste):
+   - Waspadai siswa yang menyisipkan 1 kalimat pembuka sendiri lalu menyalin 1-2 paragraf/poin hasil generate AI.
+   - Waspadai siswa yang hanya mencuplik beberapa poin/frasa kunci dari AI ke dalam jawabannya.
+   - JIKA ADA potongan kalimat, paragraf, atau poin berformat AI meski hanya 20%-40% dari total jawaban, TETAP DETEKSI dan berikan indikasiAiPersen yang proporsional (misal: 35%-65%) serta aiDugaanKategori "Campuran AI" atau "Didominasi AI". JANGAN kategorikan "Asli Siswa" jika terdapat fragmen AI!
+
+2. Deteksi AI yang Disusun Ulang / Parafrasa Dangkal (Rewritten / Paraphrased AI):
+   - Siswa sering mengganti kata sambung, mengubah urutan poin, atau menghapus kata pembuka AI agar terlihat alami.
+   - Kenali pola struktural sintetik:
+     a. Diksi kaku/terlalu formal/akademis yang tidak lazim bagi siswa seusianya (misal: "secara komprehensif", "memiliki peranan fundamental", "esensial", "dapat disimpulkan bahwa", "penting untuk digarisbawahi").
+     b. Pola kalimat berirama robotik, ritme penjelasan simetris (pengantar formal -> poin ber-bold simetris -> paragraf penutup diplomatis).
+     c. Penjelasan hambar tanpa opini/konteks personal dan minim kesalahan tulis natural khas siswa.
+
+3. Kategori Dugaan AI Wajib:
+   - "Murni AI" (indikasiAiPersen ≥ 80%): Keseluruhan teks hasil generate AI tanpa modifikasi berarti.
+   - "Didominasi AI" (indikasiAiPersen 51%-79%): Mayoritas teks dari AI, hanya sedikit kata/urutan yang diubah siswa.
+   - "Campuran AI" (indikasiAiPersen 25%-50%): Siswa mencampur tulisan sendiri dengan potongan/poin AI, atau memparafrasa output AI.
+   - "Didominasi Siswa" (indikasiAiPersen 10%-24%): Mayoritas tulisan siswa sendiri, hanya ada sedikit frasa formal umum.
+   - "Asli Siswa" (indikasiAiPersen < 10%): Tulisan murni dan gaya bahasa organik alami siswa.
+
+4. Deteksi Plagiarisme Internet:
+   - Deteksi kemiripan teks/definisi dengan sumber web (Brainly, Roboguru, Ruangguru, Wikipedia, modul daring). Sebutkan sumber jika ada.
+
+5. Penilaian Skor (nilaiDiberikan 0 s/d nilaiMaksimal):
+   - Nilai kesesuaian materi (kesesuaianPersen 0-100%) dan berikan skor proporsional.
 
 Output WAJIB JSON persis:
 {
@@ -430,6 +447,12 @@ export async function analyzeWithKeyRotation(
     questionText += `(Foto/screenshot jawaban siswa di atas. Mohon baca dan evaluasi tulisan pada gambar)\n`;
   }
 
+  questionText += `\n[INSTRUKSI AUDIT AI & PENILAIAN]:
+1. Periksa dengan teliti apakah jawaban mengandung sisipan/potongan teks hasil generate AI (ChatGPT/Gemini/Claude) atau parafrasa dangkal/penyusunan ulang dari output AI.
+2. Jika ada fragmen kalimat/poin yang berasal dari AI (meski siswa menyusun ulang atau mencampur dengan kalimat sendiri), berikan indikasiAiPersen yang sesuai (misal: 30%-70%) dan tetapkan aiDugaanKategori "Campuran AI" atau "Didominasi AI". Tuliskan bukti potongan/pola kalimat tersebut pada ciriCiriAiTerdeteksi.
+3. Nilai kesesuaian materi secara objektif dan berikan nilaiDiberikan (skala 0 - ${soal.nilaiMaksimal}).
+`;
+
   parts.push({ text: questionText });
 
   let lastError: any = null;
@@ -448,7 +471,7 @@ export async function analyzeWithKeyRotation(
 
         const clampedNilai = Math.max(0, Math.min(maxVal, Number(parsed.nilaiDiberikan) || 0));
         const clampedKesesuaian = Math.max(0, Math.min(100, Math.round(Number(parsed.kesesuaianPersen) || 0)));
-        const clampedAi = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiAiPersen) || 0)));
+        let clampedAi = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiAiPersen) || 0)));
         const clampedPlagiat = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiPlagiarismePersen) || 0)));
 
         let plagiatKategori = parsed.plagiarismeKategori;
@@ -458,6 +481,27 @@ export async function analyzeWithKeyRotation(
           else if (clampedPlagiat > 15) plagiatKategori = "Kemiripan Rendah";
           else plagiatKategori = "Bebas Plagiasi";
         }
+
+        let aiKategori = parsed.aiDugaanKategori;
+        if (!aiKategori || (aiKategori === "Asli Siswa" && clampedAi >= 25)) {
+          if (clampedAi >= 80) aiKategori = "Murni AI";
+          else if (clampedAi >= 51) aiKategori = "Didominasi AI";
+          else if (clampedAi >= 25) aiKategori = "Campuran AI";
+          else if (clampedAi >= 10) aiKategori = "Didominasi Siswa";
+          else aiKategori = "Asli Siswa";
+        } else if (aiKategori === "Campuran AI" && clampedAi < 25) {
+          clampedAi = Math.max(clampedAi, 35);
+        } else if (aiKategori === "Didominasi AI" && clampedAi < 51) {
+          clampedAi = Math.max(clampedAi, 60);
+        } else if (aiKategori === "Murni AI" && clampedAi < 80) {
+          clampedAi = Math.max(clampedAi, 85);
+        }
+
+        const ciriAi = Array.isArray(parsed.ciriCiriAiTerdeteksi) && parsed.ciriCiriAiTerdeteksi.length > 0
+          ? parsed.ciriCiriAiTerdeteksi
+          : clampedAi >= 25
+          ? ["Ditemukan pola struktur kalimat dan fragmen frasa khas kecerdasan buatan (LLM) yang dicampur/disusun ulang."]
+          : [];
 
         return {
           soalId: soal.id,
@@ -476,9 +520,9 @@ export async function analyzeWithKeyRotation(
               : "Rangkaian kata dan penjelasan tergolong alami dan orisinal dari pemahaman siswa."),
           nilaiDiberikan: Math.round(clampedNilai * 10) / 10,
           nilaiMaksimal: maxVal,
-          aiDugaanKategori: parsed.aiDugaanKategori || "Asli Siswa",
+          aiDugaanKategori: aiKategori,
           ringkasanAnalisis: parsed.ringkasanAnalisis || "Analisis selesai.",
-          ciriCiriAiTerdeteksi: Array.isArray(parsed.ciriCiriAiTerdeteksi) ? parsed.ciriCiriAiTerdeteksi : [],
+          ciriCiriAiTerdeteksi: ciriAi,
           kelebihanJawaban: Array.isArray(parsed.kelebihanJawaban) ? parsed.kelebihanJawaban : [],
           kelemahanJawaban: Array.isArray(parsed.kelemahanJawaban) ? parsed.kelemahanJawaban : [],
           rekomendasiGuru: parsed.rekomendasiGuru || "Pertahankan kualitas pembelajaran.",
