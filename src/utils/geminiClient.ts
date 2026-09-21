@@ -22,21 +22,26 @@ export interface QuestionAnalysisRequest {
 }
 
 const CANDIDATE_MODELS = [
-  "gemini-flash-latest",
   "gemini-2.5-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-3.8-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-1.5-flash",
+  "gemini-flash-latest",
 ];
 
 const COMPACT_SYSTEM_PROMPT = `Anda adalah penilai ujian "BigMA Baik" untuk guru di Indonesia.
-Lakukan analisis jawaban siswa secara objektif, cermat, dan komprehensif:
+Evaluasi jawaban siswa secara objektif, akurat, dan ringkas:
+1. kesesuaianPersen (0-100): ketepatan konsep & kebenaran materi terhadap soal.
+2. indikasiAiPersen (0-100): kemungkinan kalimat dibuat oleh AI/LLM (ChatGPT/Gemini/Claude).
+3. indikasiPlagiarismePersen (0-100): tingkat kemiripan teks dengan sumber web/kunci jawaban daring.
+4. plagiarismeKategori: "Bebas Plagiasi" | "Kemiripan Rendah" | "Kemiripan Sedang" | "Terindikasi Plagiat Web".
+5. nilaiDiberikan (0 s/d nilaiMaksimal): nilai proporsional sesuai mutu & orisinalitas.
+6. aiDugaanKategori: "Asli Siswa" | "Didominasi Siswa" | "Campuran AI" | "Didominasi AI" | "Murni AI".
+7. ringkasanAnalisis: kesimpulan singkat padat (1-2 kalimat).
+8. kelebihanJawaban: array 1-2 poin kelebihan.
+9. kelemahanJawaban: array 1-2 poin kekurangan jika ada.
+10. rekomendasiGuru: rekomendasi tindak lanjut singkat.
 
-1. Kesesuaian Materi (0-100%): Tingkat ketepatan, kelengkapan konsep, dan kebenaran jawaban siswa terhadap pertanyaan/soal yang diajukan.
-2. Indikasi Jawaban AI (0-100%): Deteksi apakah susunan kalimat dihasilkan oleh kecerdasan buatan / LLM (seperti ChatGPT, Gemini, Claude) dengan ciri khas gaya bahasa sintetik kaku, struktur poin berulang, kata transisi formal berlebih, atau murni dari pemikiran & gaya bahasa siswa sendiri.
-3. Indikasi Plagiarisme Internet (0-100%): Deteksi apakah jawaban siswa merupakan hasil salin-tempel (copy-paste) atau kemiripan kata-demi-kata (verbatim/parafrasa dangkal) dari sumber internet, artikel website, blog edukasi, Wikipedia, kunci jawaban daring (seperti Brainly/Roboguru), atau buku materi umum. (Perbedaan: Indikasi AI mendeteksi generator AI, sedangkan Plagiarisme mendeteksi kemiripan teks dengan referensi di internet/web).
-4. Nilai Diberikan: Skor angka dari 0 sampai nilaiMaksimal berdasarkan mutu konten serta kejujuran akademik.
-
-Kembalikan format JSON persis sesuai struktur berikut:
+Output WAJIB JSON persis:
 {
   "kesesuaianPersen": number,
   "indikasiAiPersen": number,
@@ -124,7 +129,13 @@ function safeParseAnalysisJson(rawText: string, maxVal: number): any {
   throw new Error("Gagal membaca struktur JSON hasil analisis.");
 }
 
-async function directGeminiRestCall(apiKey: string, model: string, parts: any[], timeoutMs = 25000) {
+async function directGeminiRestCall(
+  apiKey: string,
+  model: string,
+  parts: any[],
+  timeoutMs = 20000,
+  maxTokens = 1000
+) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
   )}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -142,6 +153,7 @@ async function directGeminiRestCall(apiKey: string, model: string, parts: any[],
       ],
       generationConfig: {
         temperature: 0.1,
+        maxOutputTokens: maxTokens,
         responseMimeType: "application/json",
       },
     };
@@ -179,7 +191,7 @@ async function directGeminiRestCall(apiKey: string, model: string, parts: any[],
 }
 
 /**
- * Verify API Keys with server-first strategy and direct browser fallback
+ * Verify API Keys with server-first strategy and direct browser fallback (ultra-fast & 1 token per key)
  */
 export async function verifyApiKeys(keys: string[]): Promise<KeyCheckResult[]> {
   try {
@@ -196,7 +208,7 @@ export async function verifyApiKeys(keys: string[]): Promise<KeyCheckResult[]> {
     console.warn("Server verify endpoint error, executing client-side verification fallback:", serverErr);
   }
 
-  // Fallback: Direct test from client browser
+  // Fallback: Direct test from client browser with fast 1-token ping
   return Promise.all(
     keys.map(async (key, idx) => {
       const cleanKey = (key || "").trim();
@@ -210,7 +222,7 @@ export async function verifyApiKeys(keys: string[]): Promise<KeyCheckResult[]> {
       }
 
       try {
-        await directGeminiRestCall(cleanKey, "gemini-flash-latest", [{ text: "ping" }], 7000);
+        await directGeminiRestCall(cleanKey, "gemini-2.5-flash-lite", [{ text: "ping" }], 4500, 1);
         return {
           key: cleanKey,
           index: idx + 1,
@@ -238,18 +250,18 @@ export async function verifyApiKeys(keys: string[]): Promise<KeyCheckResult[]> {
           };
         }
 
-        // Try lite fallback
+        // Try fast fallback with gemini-2.5-flash
         try {
-          await directGeminiRestCall(cleanKey, "gemini-3.1-flash-lite", [{ text: "ping" }], 5000);
+          await directGeminiRestCall(cleanKey, "gemini-2.5-flash", [{ text: "ping" }], 4000, 1);
           return {
             key: cleanKey,
             index: idx + 1,
             status: "ready" as const,
             message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
           };
-        } catch (liteErr: any) {
-          const liteMsg = String(liteErr?.message || "");
-          if (liteErr?.status === 429 || liteMsg.includes("429")) {
+        } catch (fallbackErr: any) {
+          const fbMsg = String(fallbackErr?.message || "");
+          if (fallbackErr?.status === 429 || fbMsg.includes("429")) {
             return {
               key: cleanKey,
               index: idx + 1,
@@ -257,7 +269,7 @@ export async function verifyApiKeys(keys: string[]): Promise<KeyCheckResult[]> {
               message: "Kuota Habis / Rate Limit Terlampaui (429)",
             };
           }
-          if (liteErr?.status === 400 || liteErr?.status === 403 || liteMsg.includes("API_KEY_INVALID")) {
+          if (fallbackErr?.status === 400 || fallbackErr?.status === 403 || fbMsg.includes("API_KEY_INVALID")) {
             return {
               key: cleanKey,
               index: idx + 1,

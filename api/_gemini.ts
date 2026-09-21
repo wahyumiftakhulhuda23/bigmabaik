@@ -25,14 +25,19 @@ export interface KeyCheckResult {
 }
 
 export const COMPACT_SYSTEM_PROMPT = `Anda adalah penilai ujian "BigMA Baik" untuk guru di Indonesia.
-Lakukan analisis jawaban siswa secara objektif, cermat, dan komprehensif:
+Evaluasi jawaban siswa secara objektif, akurat, dan ringkas:
+1. kesesuaianPersen (0-100): ketepatan konsep & kebenaran materi terhadap soal.
+2. indikasiAiPersen (0-100): kemungkinan kalimat dibuat oleh AI/LLM (ChatGPT/Gemini/Claude).
+3. indikasiPlagiarismePersen (0-100): tingkat kemiripan teks dengan sumber web/kunci jawaban daring.
+4. plagiarismeKategori: "Bebas Plagiasi" | "Kemiripan Rendah" | "Kemiripan Sedang" | "Terindikasi Plagiat Web".
+5. nilaiDiberikan (0 s/d nilaiMaksimal): nilai proporsional sesuai mutu & orisinalitas.
+6. aiDugaanKategori: "Asli Siswa" | "Didominasi Siswa" | "Campuran AI" | "Didominasi AI" | "Murni AI".
+7. ringkasanAnalisis: kesimpulan singkat padat (1-2 kalimat).
+8. kelebihanJawaban: array 1-2 poin kelebihan.
+9. kelemahanJawaban: array 1-2 poin kekurangan jika ada.
+10. rekomendasiGuru: rekomendasi tindak lanjut singkat.
 
-1. Kesesuaian Materi (0-100%): Tingkat ketepatan, kelengkapan konsep, dan kebenaran jawaban siswa terhadap pertanyaan/soal yang diajukan.
-2. Indikasi Jawaban AI (0-100%): Deteksi apakah susunan kalimat dihasilkan oleh kecerdasan buatan / LLM (seperti ChatGPT, Gemini, Claude) dengan ciri khas gaya bahasa sintetik kaku, struktur poin berulang, kata transisi formal berlebih, atau murni dari pemikiran & gaya bahasa siswa sendiri.
-3. Indikasi Plagiarisme Internet (0-100%): Deteksi apakah jawaban siswa merupakan hasil salin-tempel (copy-paste) atau kemiripan kata-demi-kata (verbatim/parafrasa dangkal) dari sumber internet, artikel website, blog edukasi, Wikipedia, kunci jawaban daring (seperti Brainly/Roboguru), atau buku materi umum. (Perbedaan: Indikasi AI mendeteksi generator AI, sedangkan Plagiarisme mendeteksi kemiripan teks dengan referensi di internet/web).
-4. Nilai Diberikan: Skor angka dari 0 sampai nilaiMaksimal berdasarkan mutu konten serta kejujuran akademik.
-
-Kembalikan format JSON persis sesuai struktur berikut:
+Output WAJIB JSON persis:
 {
   "kesesuaianPersen": number,
   "indikasiAiPersen": number,
@@ -50,10 +55,10 @@ Kembalikan format JSON persis sesuai struktur berikut:
 }`;
 
 export const CANDIDATE_MODELS = [
-  "gemini-flash-latest",
   "gemini-2.5-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-3.8-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-1.5-flash",
+  "gemini-flash-latest",
 ];
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -217,7 +222,8 @@ export async function callGeminiRest(
   apiKey: string,
   model: string,
   parts: any[],
-  timeoutMs = 25000
+  timeoutMs = 20000,
+  maxTokens = 1000
 ): Promise<{ text: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
@@ -236,6 +242,7 @@ export async function callGeminiRest(
       ],
       generationConfig: {
         temperature: 0.1,
+        maxOutputTokens: maxTokens,
         responseMimeType: "application/json",
       },
     };
@@ -293,7 +300,7 @@ export async function callGeminiRest(
 }
 
 /**
- * Test single API key validity & quota via lightweight ping
+ * Test single API key validity & quota via lightweight 1-token ping (300-500ms)
  */
 export async function verifySingleKey(rawKey: string, index: number): Promise<KeyCheckResult> {
   const key = (rawKey || "").trim();
@@ -306,9 +313,9 @@ export async function verifySingleKey(rawKey: string, index: number): Promise<Ke
     };
   }
 
-  // Ping test
+  // Super fast 1-token ping
   try {
-    await callGeminiRest(key, "gemini-flash-latest", [{ text: "ping" }], 8000);
+    await callGeminiRest(key, "gemini-2.5-flash-lite", [{ text: "ping" }], 4500, 1);
     return {
       key,
       index: index + 1,
@@ -333,17 +340,17 @@ export async function verifySingleKey(rawKey: string, index: number): Promise<Ke
       };
     }
 
-    // Try fallback model
+    // Fast fallback with gemini-2.5-flash
     try {
-      await callGeminiRest(key, "gemini-3.1-flash-lite", [{ text: "ping" }], 6000);
+      await callGeminiRest(key, "gemini-2.5-flash", [{ text: "ping" }], 4000, 1);
       return {
         key,
         index: index + 1,
         status: "ready",
         message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
       };
-    } catch (liteErr: any) {
-      if (isQuotaError(liteErr)) {
+    } catch (fallbackErr: any) {
+      if (isQuotaError(fallbackErr)) {
         return {
           key,
           index: index + 1,
@@ -351,7 +358,7 @@ export async function verifySingleKey(rawKey: string, index: number): Promise<Ke
           message: "Kuota Habis / Rate Limit Terlampaui (429)",
         };
       }
-      if (isInvalidKeyError(liteErr)) {
+      if (isInvalidKeyError(fallbackErr)) {
         return {
           key,
           index: index + 1,
@@ -359,7 +366,7 @@ export async function verifySingleKey(rawKey: string, index: number): Promise<Ke
           message: "API Key Tidak Valid / Salah",
         };
       }
-      if (isTransientError(liteErr) || isTransientError(err)) {
+      if (isTransientError(fallbackErr) || isTransientError(err)) {
         return {
           key,
           index: index + 1,
@@ -372,7 +379,7 @@ export async function verifySingleKey(rawKey: string, index: number): Promise<Ke
         key,
         index: index + 1,
         status: "error",
-        message: `Gagal: ${cleanErrorMessage(liteErr || err).slice(0, 80)}`,
+        message: `Gagal: ${cleanErrorMessage(fallbackErr || err).slice(0, 80)}`,
       };
     }
   }

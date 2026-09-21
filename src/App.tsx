@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "./components/Header";
 import SessionHeader from "./components/SessionHeader";
 import SessionActionBar from "./components/SessionActionBar";
+import BatchProgressBanner, { BatchProgressData } from "./components/BatchProgressBanner";
 import SoalCard from "./components/SoalCard";
 import HistoryView from "./components/HistoryView";
 import ReportModal from "./components/ReportModal";
@@ -24,7 +25,7 @@ import {
 } from "./utils/license";
 import { exportSessionsToExcel } from "./utils/excelExport";
 import { safeFetchJson } from "./utils/apiHelper";
-import { analyzeSingleQuestion, analyzeBatchQuestions } from "./utils/geminiClient";
+import { analyzeSingleQuestion } from "./utils/geminiClient";
 import { CheckCircle2, AlertCircle, Info, X, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { sound } from "./utils/audio";
@@ -63,25 +64,59 @@ export default function App() {
     return getStoredSessions();
   });
 
-  // Loading states
+  // Loading & Sequential Analysis states
   const [analyzingMap, setAnalyzingMap] = useState<Record<string, boolean>>({});
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
   const [saveAllSuccess, setSaveAllSuccess] = useState(false);
 
+  // Interactive Batch Progress state
+  const [batchProgress, setBatchProgress] = useState<BatchProgressData>({
+    isActive: false,
+    currentIndex: 0,
+    total: 0,
+    currentSoalNumber: 1,
+    percent: 0,
+    statusText: "",
+    succeededCount: 0,
+    failedCount: 0,
+    elapsedSeconds: 0,
+    isCancelling: false,
+  });
+  const cancelBatchRef = useRef(false);
+
+  // Timer for active batch analysis
+  useEffect(() => {
+    let timerInterval: any = null;
+    if (batchProgress.isActive) {
+      timerInterval = setInterval(() => {
+        setBatchProgress((prev) => {
+          if (!prev.isActive) return prev;
+          return { ...prev, elapsedSeconds: prev.elapsedSeconds + 1 };
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+    };
+  }, [batchProgress.isActive]);
+
   // In-app Toast Notification state
   const [toast, setToast] = useState<{
     id: number;
-    type: "success" | "error" | "info";
+    type: "success" | "error" | "info" | "warning";
     text: string;
   } | null>(null);
 
-  const showToast = (text: string, type: "success" | "error" | "info" = "info") => {
+  const showToast = (
+    text: string,
+    type: "success" | "error" | "info" | "warning" = "info"
+  ) => {
     const id = Date.now();
     setToast({ id, type, text });
 
     if (type === "success") {
       sound.playSuccess();
-    } else if (type === "error") {
+    } else if (type === "error" || type === "warning") {
       sound.playWarning();
     } else {
       sound.playTabClick();
@@ -89,7 +124,7 @@ export default function App() {
 
     setTimeout(() => {
       setToast((curr) => (curr?.id === id ? null : curr));
-    }, 3400);
+    }, 3600);
   };
 
   // Trigger modal jika user pertama kali mengunjungi aplikasi (bisa di-skip)
@@ -443,64 +478,159 @@ export default function App() {
     }
   };
 
-  // Analyze all questions
+  // Cancel batch analysis handler
+  const handleCancelBatch = () => {
+    cancelBatchRef.current = true;
+    setBatchProgress((prev) => ({ ...prev, isCancelling: true }));
+    showToast("Menghentikan proses analisis berurutan...", "info");
+  };
+
+  // Analyze all questions sequentially one by one
   const handleAnalyzeAll = async () => {
-    const hasAnyAnswer = session.soalList.some((s) => s.jawabanTeks || s.jawabanGambarBase64);
-    if (!hasAnyAnswer) {
+    // Filter questions that have either text or image answers
+    const questionsToAnalyze = session.soalList.filter(
+      (s) => (s.jawabanTeks && s.jawabanTeks.trim().length > 0) || s.jawabanGambarBase64
+    );
+
+    if (questionsToAnalyze.length === 0) {
+      sound.playWarning();
       showToast("Belum ada jawaban siswa yang diisi atau diunggah pada butir soal manapun.", "error");
       return;
     }
 
+    cancelBatchRef.current = false;
     setIsBatchAnalyzing(true);
+    sound.playTabClick();
 
-    try {
-      const payload = session.soalList.map((s) => ({
-        id: s.id,
-        nomorSoal: s.nomorSoal,
-        naskahSoal: s.naskahSoal,
-        gambarSoalBase64: s.gambarSoalBase64,
-        gambarSoalMimeType: s.gambarSoalMimeType,
-        nilaiMaksimal: s.nilaiMaksimal,
-        jawabanTeks: s.jawabanTeks,
-        jawabanGambarBase64: s.jawabanGambarBase64,
-        jawabanGambarMimeType: s.jawabanGambarMimeType,
+    const total = questionsToAnalyze.length;
+    setBatchProgress({
+      isActive: true,
+      currentIndex: 0,
+      total,
+      currentSoalNumber: questionsToAnalyze[0].nomorSoal,
+      percent: 0,
+      statusText: `Mempersiapkan analisis berurutan (${total} butir soal)...`,
+      succeededCount: 0,
+      failedCount: 0,
+      elapsedSeconds: 0,
+      isCancelling: false,
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < questionsToAnalyze.length; i++) {
+      if (cancelBatchRef.current) {
+        showToast("Analisis berurutan telah dihentikan oleh pengguna.", "info");
+        break;
+      }
+
+      const currentSoal = questionsToAnalyze[i];
+      const startPercent = Math.round((i / total) * 100);
+
+      setBatchProgress((prev) => ({
+        ...prev,
+        currentIndex: i,
+        currentSoalNumber: currentSoal.nomorSoal,
+        percent: startPercent,
+        statusText: `Sedang menganalisis Soal #${currentSoal.nomorSoal} (${i + 1} dari ${total})...`,
       }));
 
-      const results = await analyzeBatchQuestions(payload, apiKeys);
+      // Highlight active question card
+      setAnalyzingMap((prev) => ({ ...prev, [currentSoal.id]: true }));
 
-      const resultsMap: Record<string, any> = {};
-      (results || []).forEach((r: any) => {
-        resultsMap[r.soalId] = r;
-      });
+      try {
+        const result = await analyzeSingleQuestion({
+          id: currentSoal.id,
+          nomorSoal: currentSoal.nomorSoal,
+          naskahSoal: currentSoal.naskahSoal,
+          gambarSoalBase64: currentSoal.gambarSoalBase64,
+          gambarSoalMimeType: currentSoal.gambarSoalMimeType,
+          nilaiMaksimal: currentSoal.nilaiMaksimal,
+          jawabanTeks: currentSoal.jawabanTeks,
+          jawabanGambarBase64: currentSoal.jawabanGambarBase64,
+          jawabanGambarMimeType: currentSoal.jawabanGambarMimeType,
+          apiKeys: apiKeys,
+        });
 
-      setSession((prev) => {
-        const nextSoalList = prev.soalList.map((s) => ({
-          ...s,
-          analisis: resultsMap[s.id] || s.analisis,
-          isSaved: true,
-        }));
-        const totals = calculateSessionTotals(nextSoalList);
-        const updatedSession = {
+        succeeded++;
+
+        // Instantly update session and storage for this question
+        setSession((prev) => {
+          const nextSoalList = prev.soalList.map((s) =>
+            s.id === currentSoal.id ? { ...s, analisis: result, isSaved: true } : s
+          );
+          const totals = calculateSessionTotals(nextSoalList);
+          const updatedSession = {
+            ...prev,
+            soalList: nextSoalList,
+            ...totals,
+            updatedAt: new Date().toISOString(),
+          };
+          const updatedHistory = saveSessionToStorage(updatedSession);
+          setHistoryList(updatedHistory);
+          return updatedSession;
+        });
+
+        const newPercent = Math.round(((i + 1) / total) * 100);
+        setBatchProgress((prev) => ({
           ...prev,
-          soalList: nextSoalList,
-          ...totals,
-          updatedAt: new Date().toISOString(),
-        };
-        const updatedHistory = saveSessionToStorage(updatedSession);
-        setHistoryList(updatedHistory);
-        return updatedSession;
-      });
-      showToast("Semua butir soal berhasil dianalisis AI!", "success");
-    } catch (err: any) {
-      console.error("Gagal analisis semua soal:", err);
-      let msg = err.message || "Terjadi kendala saat analisis massal.";
-      if (msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE")) {
-        msg = "Server Google AI sedang mengalami lonjakan beban sementara (503). Silakan coba kembali.";
+          succeededCount: succeeded,
+          percent: newPercent,
+          statusText: `Soal #${currentSoal.nomorSoal} berhasil dianalisis (Nilai: ${result.nilaiDiberikan}/${currentSoal.nilaiMaksimal})`,
+        }));
+      } catch (err: any) {
+        console.error(`Gagal analisis soal #${currentSoal.nomorSoal}:`, err);
+        failed++;
+        const newPercent = Math.round(((i + 1) / total) * 100);
+        setBatchProgress((prev) => ({
+          ...prev,
+          failedCount: failed,
+          percent: newPercent,
+          statusText: `Soal #${currentSoal.nomorSoal} gagal dievaluasi.`,
+        }));
+
+        let msg = err.message || "Gagal";
+        if (msg.includes("503") || msg.includes("UNAVAILABLE")) {
+          msg = `Soal #${currentSoal.nomorSoal}: Server Google AI sibuk (503)`;
+        } else if (msg.includes("429") || msg.includes("kuota") || msg.includes("quota")) {
+          msg = `Soal #${currentSoal.nomorSoal}: Kuota API Key habis (429)`;
+        }
+        showToast(msg, "error");
+      } finally {
+        setAnalyzingMap((prev) => ({ ...prev, [currentSoal.id]: false }));
       }
-      showToast(msg, "error");
-    } finally {
-      setIsBatchAnalyzing(false);
+
+      // Safe pause between questions to preserve rate limits
+      if (i < questionsToAnalyze.length - 1 && !cancelBatchRef.current) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
     }
+
+    setIsBatchAnalyzing(false);
+    setBatchProgress((prev) => ({
+      ...prev,
+      percent: 100,
+      statusText: `Selesai: ${succeeded} berhasil dievaluasi, ${failed} gagal/dilewati.`,
+      isCancelling: false,
+    }));
+
+    // Final outcome notification & audio
+    if (succeeded > 0 && failed === 0) {
+      sound.playSuccess();
+      showToast(`Semua ${succeeded} butir soal berhasil dianalisis secara berurutan!`, "success");
+    } else if (succeeded > 0 && failed > 0) {
+      sound.playWarning();
+      showToast(`Analisis berurutan selesai: ${succeeded} berhasil, ${failed} kendala.`, "warning");
+    } else if (!cancelBatchRef.current) {
+      sound.playWarning();
+      showToast("Gagal melakukan analisis berurutan. Periksa API Key Anda.", "error");
+    }
+
+    // Auto dismiss banner after 3 seconds
+    setTimeout(() => {
+      setBatchProgress((prev) => ({ ...prev, isActive: false }));
+    }, 3000);
   };
 
   // Start a new session
@@ -552,11 +682,14 @@ export default function App() {
                   ? "bg-emerald-950/90 text-emerald-100 border-emerald-500/40 shadow-emerald-950/50"
                   : toast.type === "error"
                   ? "bg-rose-950/90 text-rose-100 border-rose-500/40 shadow-rose-950/50"
+                  : toast.type === "warning"
+                  ? "bg-amber-950/90 text-amber-100 border-amber-500/40 shadow-amber-950/50"
                   : "bg-slate-900/90 text-cyan-100 border-cyan-500/30 shadow-black/60"
               }`}
             >
               {toast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />}
               {toast.type === "error" && <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+              {toast.type === "warning" && <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />}
               {toast.type === "info" && <Info className="h-4 w-4 text-cyan-400 shrink-0" />}
               <span className="pr-1">{toast.text}</span>
               <button
@@ -627,6 +760,13 @@ export default function App() {
                 }
                 isBatchAnalyzing={isBatchAnalyzing}
                 saveAllSuccess={saveAllSuccess}
+              />
+
+              {/* Visual Loading Progress Bar Interaktif untuk Analisis Berurutan */}
+              <BatchProgressBanner
+                progress={batchProgress}
+                namaSiswa={session.namaSiswa}
+                onCancel={handleCancelBatch}
               />
 
               {/* Daftar Butir Soal dengan Animasi Stagger & Fade */}

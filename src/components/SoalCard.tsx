@@ -64,32 +64,97 @@ export default function SoalCard({
     onAnalyze();
   };
 
-  // Process image files
-  const processImageFile = (file: File, target: "question" | "answer") => {
+  // Process and compress image files for ultra-fast upload & token saving
+  const processImageFile = async (file: File, target: "question" | "answer") => {
     if (!file.type.startsWith("image/")) {
       sound.playWarning();
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      sound.playAddCard();
-      const base64 = e.target?.result as string;
-      if (target === "question") {
-        onUpdate({
-          gambarSoalBase64: base64,
-          gambarSoalMimeType: file.type,
-          gambarSoalFileName: file.name,
-        });
-      } else {
-        onUpdate({
-          jawabanGambarBase64: base64,
-          jawabanGambarMimeType: file.type,
-          jawabanGambarFileName: file.name,
-        });
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawBase64 = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1280;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.85);
+            sound.playAddCard();
+            if (target === "question") {
+              onUpdate({
+                gambarSoalBase64: compressedBase64,
+                gambarSoalMimeType: "image/jpeg",
+                gambarSoalFileName: file.name,
+              });
+            } else {
+              onUpdate({
+                jawabanGambarBase64: compressedBase64,
+                jawabanGambarMimeType: "image/jpeg",
+                jawabanGambarFileName: file.name,
+              });
+            }
+            return;
+          }
+
+          // Fallback if canvas context fails
+          sound.playAddCard();
+          if (target === "question") {
+            onUpdate({
+              gambarSoalBase64: rawBase64,
+              gambarSoalMimeType: file.type,
+              gambarSoalFileName: file.name,
+            });
+          } else {
+            onUpdate({
+              jawabanGambarBase64: rawBase64,
+              jawabanGambarMimeType: file.type,
+              jawabanGambarFileName: file.name,
+            });
+          }
+        };
+
+        img.onerror = () => {
+          sound.playAddCard();
+          if (target === "question") {
+            onUpdate({
+              gambarSoalBase64: rawBase64,
+              gambarSoalMimeType: file.type,
+              gambarSoalFileName: file.name,
+            });
+          } else {
+            onUpdate({
+              jawabanGambarBase64: rawBase64,
+              jawabanGambarMimeType: file.type,
+              jawabanGambarFileName: file.name,
+            });
+          }
+        };
+
+        img.src = rawBase64;
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      sound.playWarning();
+    }
   };
 
   // Paste from clipboard button
