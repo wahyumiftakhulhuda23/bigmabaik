@@ -28,9 +28,22 @@ const CANDIDATE_MODELS = [
   "gemini-flash-latest",
 ];
 
-const COMPACT_SYSTEM_PROMPT = `Anda adalah sistem penilai & pendeteksi orisinalitas ujian "BigMA Baik" untuk guru di Indonesia dengan keahlian forensik teks tingkat tinggi.
+const COMPACT_SYSTEM_PROMPT = `Anda adalah sistem penilai & pendeteksi orisinalitas ujian "BigMA Baik" untuk guru di Indonesia dengan keahlian evaluasi pedagogis dan forensik teks tingkat tinggi.
 
-TUGAS UTAMA: Evaluasi kebenaran materi sekaligus lakukan audit ketat terhadap penggunaan AI (LLM seperti ChatGPT/Gemini/Claude), teknik kamuflase teks AI, serta plagiarisme web.
+TUGAS UTAMA: Evaluasi ketepatan materi secara mendalam serta lakukan audit ketat terhadap penggunaan AI (ChatGPT/Gemini/Claude, termasuk parafrasa & sisipan parsial) dan plagiarisme web.
+
+PRINSIP WAJIB: ANALISIS MENDETAIL, KONTEKSTUAL & BEBAS KALIMAT KLISE/TEMPLATE
+1. DILARANG KERAS menggunakan kalimat шаблон/generik berulang (seperti "Jawaban sudah sesuai", "Berdasarkan kriteria yang ditentukan", "Tidak ada ciri AI").
+2. Setiap ulasan (ringkasan, kelebihan, kelemahan, bukti AI, plagiat, rekomendasi) WAJIB merujuk langsung pada istilah, konsep, teori, langkah pengerjaan, atau kalimat konkret yang ditulis siswa pada soal tersebut.
+3. Buat penjelasan padat, tajam, dan langsung pada inti materi agar proses analisis cepat dan efisien tanpa mengorbankan kedalaman evaluasi.
+
+PANDUAN DETAIL FIELD JSON:
+- ringkasanAnalisis: 2-3 kalimat tajam mengulas esensi konsep jawaban siswa, letak kebenaran/kekeliruan utamanya, dan catatan integritasnya.
+- kelebihanJawaban: Array 2-3 poin spesifik membeberkan konsep/langkah yang dijawab tepat dengan menyebutkan istilah atau bagian jawaban siswa.
+- kelemahanJawaban: Array 1-3 poin spesifik membeberkan konsep yang kurang/salah, langkah terlewat, penjelasan yang dangkal, atau ketidaksesuaian thd pertanyaan soal.
+- ciriCiriAiTerdeteksi: Array 1-3 poin. Jika terindikasi AI (≥10%), sebutkan kutipan frasa/pola sintetik/struktur simetris khas ChatGPT yang ditemukan. Jika orisinal (<10%), sebutkan bukti gaya penulisan organik dan diksi alami siswa.
+- detailPlagiarisme: Uraian spesifik membedakan orisinalitas siswa vs kemiripan dengan definisi/sumber web (Brainly, Wikipedia, Roboguru, modul daring). Sebutkan frasa yang mirip jika ada.
+- rekomendasiGuru: Saran tindak lanjut pedagogis konkret untuk guru terkait materi soal ini (misal topik remedial, penguatan konsep spesifik, atau verifikasi lisan).
 
 PANDUAN DETEKSI PENGGUNAAN AI (SANGAT TELITI & PEKA TERHADAP MODIFIKASI/TRIK SISWA):
 1. Deteksi AI Hibrida & Sisipan Sebagian (Partial Copy-Paste):
@@ -372,10 +385,11 @@ export async function analyzeSingleQuestion(soal: QuestionAnalysisRequest): Prom
     questionText += `(Foto/screenshot jawaban siswa di atas. Mohon baca dan evaluasi tulisan pada gambar)\n`;
   }
 
-  questionText += `\n[INSTRUKSI AUDIT AI & PENILAIAN]:
-1. Periksa dengan teliti apakah jawaban mengandung sisipan/potongan teks hasil generate AI (ChatGPT/Gemini/Claude) atau parafrasa dangkal/penyusunan ulang dari output AI.
-2. Jika ada fragmen kalimat/poin yang berasal dari AI (meski siswa menyusun ulang atau mencampur dengan kalimat sendiri), berikan indikasiAiPersen yang sesuai (misal: 30%-70%) dan tetapkan aiDugaanKategori "Campuran AI" atau "Didominasi AI". Tuliskan bukti potongan/pola kalimat tersebut pada ciriCiriAiTerdeteksi.
-3. Nilai kesesuaian materi secara objektif dan berikan nilaiDiberikan (skala 0 - ${soal.nilaiMaksimal}).
+  questionText += `\n[INSTRUKSI EVALUASI MENDETAIL & AUDIT AI]:
+1. Evaluasi konsep materi secara mendalam: sebutkan konsep spesifik mana yang dijawab benar (pada kelebihanJawaban) dan bagian mana yang kurang/keliru/hilang (pada kelemahanJawaban).
+2. Dilarang memberikan alasan шаблон/generik: setiap alasan WAJIB menyertakan kutipan kata/istilah yang ditulis siswa pada soal ini.
+3. Periksa dengan cermat apakah ada potongan kalimat dari AI (ChatGPT/Gemini/Claude) yang disisipkan atau disusun ulang: jika ada, berikan indikasiAiPersen (30%-70%), pilih kategori "Campuran AI"/"Didominasi AI", dan sebutkan bukti potongan/pola kalimatnya pada ciriCiriAiTerdeteksi.
+4. Berikan nilaiDiberikan (skala 0 - ${soal.nilaiMaksimal}) secara proporsional sesuai kualitas pemahaman materi.
 `;
 
   parts.push({ text: questionText });
