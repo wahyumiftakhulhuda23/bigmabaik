@@ -44,7 +44,7 @@ export default function SessionActionBar({
       <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 transition-all shadow-lg shadow-black/20 backdrop-blur-md">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Quick Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 divide-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 divide-slate-800">
             {/* Total Nilai */}
             <div className="px-2 py-1">
               <span className="text-[11px] text-slate-400 block font-semibold uppercase tracking-wider">
@@ -101,6 +101,24 @@ export default function SessionActionBar({
                 }`}
               >
                 {stats.rataRataAiPersen}%
+              </span>
+            </div>
+
+            {/* Plagiarisme Web */}
+            <div className="px-2 py-1 col-span-2 sm:col-span-1">
+              <span className="text-[11px] text-slate-400 block font-semibold uppercase tracking-wider">
+                Rerata Plagiat Web
+              </span>
+              <span
+                className={`text-2xl font-black block mt-0.5 ${
+                  stats.rataRataPlagiarismePersen > 60
+                    ? "text-purple-400"
+                    : stats.rataRataPlagiarismePersen > 30
+                    ? "text-amber-400"
+                    : "text-teal-400"
+                }`}
+              >
+                {stats.rataRataPlagiarismePersen}%
               </span>
             </div>
           </div>

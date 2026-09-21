@@ -2,7 +2,11 @@ export interface AnalisisHasil {
   soalId: string;
   nomorSoal: number;
   kesesuaianPersen: number; // 0 - 100%
-  indikasiAiPersen: number; // 0 - 100%
+  indikasiAiPersen: number; // 0 - 100% (Deteksi hasil generate AI)
+  indikasiPlagiarismePersen: number; // 0 - 100% (Deteksi kemiripan kata/sumber internet)
+  plagiarismeKategori: string; // "Bebas Plagiasi" | "Kemiripan Rendah" | "Kemiripan Sedang" | "Terindikasi Plagiat Web"
+  indikasiSumberPlagiarisme?: string[]; // Sumber rujukan online yang serupa (artikel, ensiklopedia, blog, forum)
+  detailPlagiarisme?: string; // Uraian kemiripan teks thd sumber internet vs kata-kata asli siswa
   nilaiDiberikan: number; // 0 - nilaiMaksimal
   nilaiMaksimal: number;
   aiDugaanKategori: string;
@@ -45,6 +49,7 @@ export interface SesiPenilaian {
   totalNilaiMaksimal: number;
   nilaiSkala100: number;
   rataRataAiPersen: number;
+  rataRataPlagiarismePersen: number;
   rataRataKesesuaianPersen: number;
   createdAt: string;
   updatedAt: string;

@@ -34,9 +34,9 @@ export async function exportSessionsToExcel(
     });
 
     // 1. Title Banner
-    summarySheet.mergeCells("A1:N1");
+    summarySheet.mergeCells("A1:P1");
     const titleCell = summarySheet.getCell("A1");
-    titleCell.value = "REKAPITULASI PENILAIAN SISWA & DETEKSI INTEGRITAS AI";
+    titleCell.value = "REKAPITULASI PENILAIAN SISWA & DETEKSI INTEGRITAS AI & PLAGIARISME";
     titleCell.font = { name: "Arial", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
     titleCell.fill = {
       type: "pattern",
@@ -47,7 +47,7 @@ export async function exportSessionsToExcel(
     summarySheet.getRow(1).height = 34;
 
     // 2. Subtitle / Info
-    summarySheet.mergeCells("A2:N2");
+    summarySheet.mergeCells("A2:P2");
     const subtitleCell = summarySheet.getCell("A2");
     const printDate = new Date().toLocaleDateString("id-ID", {
       weekday: "long",
@@ -82,7 +82,9 @@ export async function exportSessionsToExcel(
       "Nilai (Skala 100)",
       "Rerata Kesesuaian",
       "Rerata Indikasi AI",
-      "Status Integritas",
+      "Status AI",
+      "Rerata Plagiat Web",
+      "Status Plagiat Web",
       "Catatan Evaluasi Guru",
     ];
 
@@ -126,6 +128,21 @@ export async function exportSessionsToExcel(
         aiStatusBg = "FFFEF3C7";
       }
 
+      const plagPersen = item.rataRataPlagiarismePersen ?? 0;
+      let plagStatus = "Bebas Web (<30%)";
+      let plagStatusColor = "FF0F766E"; // Teal
+      let plagStatusBg = "FFCCFBF1";
+
+      if (plagPersen > 60) {
+        plagStatus = "Tinggi (>60%)";
+        plagStatusColor = "FF7E22CE"; // Purple
+        plagStatusBg = "FFF3E8FF";
+      } else if (plagPersen > 30) {
+        plagStatus = "Sedang (30-60%)";
+        plagStatusColor = "FFB45309"; // Amber
+        plagStatusBg = "FFFEF3C7";
+      }
+
       // Format nilai skala 100 color
       let nilaiBg = "FFDCFCE7";
       let nilaiColor = "FF166534";
@@ -152,6 +169,8 @@ export async function exportSessionsToExcel(
         `${item.rataRataKesesuaianPersen}%`,
         `${item.rataRataAiPersen}%`,
         aiStatus,
+        `${plagPersen}%`,
+        plagStatus,
         item.catatanGuru || "-",
       ];
       row.height = 24;
@@ -167,7 +186,7 @@ export async function exportSessionsToExcel(
         };
 
         // Alignments
-        if ([1, 2, 4, 5, 8, 9, 10, 11, 12, 13].includes(colNumber)) {
+        if ([1, 2, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15].includes(colNumber)) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
         } else {
           cell.alignment = { vertical: "middle", horizontal: "left" };
@@ -203,7 +222,7 @@ export async function exportSessionsToExcel(
           cell.font = { name: "Arial", size: 10, bold: true, color: { argb: aiStatusColor } };
         }
 
-        // Highlight: Status Integritas
+        // Highlight: Status AI
         if (colNumber === 13) {
           cell.fill = {
             type: "pattern",
@@ -211,6 +230,26 @@ export async function exportSessionsToExcel(
             fgColor: { argb: aiStatusBg },
           };
           cell.font = { name: "Arial", size: 9, bold: true, color: { argb: aiStatusColor } };
+        }
+
+        // Highlight: Plagiat Web (%)
+        if (colNumber === 14) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: plagStatusBg },
+          };
+          cell.font = { name: "Arial", size: 10, bold: true, color: { argb: plagStatusColor } };
+        }
+
+        // Highlight: Status Plagiat Web
+        if (colNumber === 15) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: plagStatusBg },
+          };
+          cell.font = { name: "Arial", size: 9, bold: true, color: { argb: plagStatusColor } };
         }
       });
     });
@@ -229,7 +268,9 @@ export async function exportSessionsToExcel(
       { width: 18 }, // Skala 100
       { width: 20 }, // Kesesuaian
       { width: 20 }, // Indikasi AI
-      { width: 24 }, // Status Integritas
+      { width: 22 }, // Status AI
+      { width: 20 }, // Plagiat Web
+      { width: 22 }, // Status Plagiat
       { width: 36 }, // Catatan
     ];
 
@@ -241,7 +282,7 @@ export async function exportSessionsToExcel(
     });
 
     // 1. Title Banner
-    detailSheet.mergeCells("A1:M1");
+    detailSheet.mergeCells("A1:O1");
     const detailTitleCell = detailSheet.getCell("A1");
     detailTitleCell.value = "RINCIAN EVALUASI & ANALISIS JAWABAN PER BUTIR SOAL";
     detailTitleCell.font = { name: "Arial", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
@@ -254,9 +295,9 @@ export async function exportSessionsToExcel(
     detailSheet.getRow(1).height = 34;
 
     // 2. Subtitle
-    detailSheet.mergeCells("A2:M2");
+    detailSheet.mergeCells("A2:O2");
     const detailSubtitleCell = detailSheet.getCell("A2");
-    detailSubtitleCell.value = "Analisis komprehensif butir soal, skor perolehan, kesesuaian materi, dan temuan AI";
+    detailSubtitleCell.value = "Analisis komprehensif butir soal, skor perolehan, kesesuaian materi, deteksi AI, dan plagiarisme internet";
     detailSubtitleCell.font = { name: "Arial", size: 9, italic: true, color: { argb: "FF475569" } };
     detailSubtitleCell.fill = {
       type: "pattern",
@@ -282,7 +323,9 @@ export async function exportSessionsToExcel(
       "Kesesuaian",
       "Indikasi AI",
       "Kategori AI",
-      "Ringkasan Analisis AI",
+      "Plagiat Web",
+      "Kategori Plagiat",
+      "Ringkasan Analisis & Integritas",
       "Rekomendasi Guru",
     ];
 
@@ -324,6 +367,8 @@ export async function exportSessionsToExcel(
         const kesesuaianPersen = soal.analisis ? soal.analisis.kesesuaianPersen : 0;
         const aiPersen = soal.analisis ? soal.analisis.indikasiAiPersen : 0;
         const kategoriAi = soal.analisis ? soal.analisis.aiDugaanKategori : "Belum Dianalisis";
+        const plagPersen = soal.analisis ? (soal.analisis.indikasiPlagiarismePersen ?? 0) : 0;
+        const kategoriPlag = soal.analisis ? (soal.analisis.plagiarismeKategori || "Bebas") : "-";
         const ringkasan = soal.analisis ? soal.analisis.ringkasanAnalisis : "-";
         const rekomendasi = soal.analisis ? soal.analisis.rekomendasiGuru : "-";
 
@@ -340,6 +385,8 @@ export async function exportSessionsToExcel(
           `${kesesuaianPersen}%`,
           `${aiPersen}%`,
           kategoriAi,
+          `${plagPersen}%`,
+          kategoriPlag,
           ringkasan,
           rekomendasi,
         ];
@@ -355,7 +402,7 @@ export async function exportSessionsToExcel(
           };
 
           // Center small columns
-          if ([1, 3, 5, 7, 8, 9, 10, 11].includes(colNumber)) {
+          if ([1, 3, 5, 7, 8, 9, 10, 11, 12, 13].includes(colNumber)) {
             cell.alignment = { vertical: "middle", horizontal: "center" };
           } else {
             cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
@@ -394,6 +441,25 @@ export async function exportSessionsToExcel(
             };
             cell.font = { name: "Arial", size: 9.5, bold: true, color: { argb: aiColor } };
           }
+
+          // Plagiat Web (%)
+          if (colNumber === 12) {
+            let pBg = "FFCCFBF1";
+            let pColor = "FF0F766E";
+            if (plagPersen > 60) {
+              pBg = "FFF3E8FF";
+              pColor = "FF7E22CE";
+            } else if (plagPersen > 30) {
+              pBg = "FFFEF3C7";
+              pColor = "FFB45309";
+            }
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: pBg },
+            };
+            cell.font = { name: "Arial", size: 9.5, bold: true, color: { argb: pColor } };
+          }
         });
 
         currentDetailRow++;
@@ -413,6 +479,8 @@ export async function exportSessionsToExcel(
       { width: 16 }, // Kesesuaian
       { width: 16 }, // Indikasi AI
       { width: 22 }, // Kategori AI
+      { width: 16 }, // Plagiat Web
+      { width: 20 }, // Kategori Plagiat
       { width: 42 }, // Ringkasan
       { width: 42 }, // Rekomendasi
     ];

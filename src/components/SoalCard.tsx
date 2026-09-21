@@ -15,6 +15,8 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Globe,
+  HelpCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SoalItem } from "../types";
@@ -462,7 +464,7 @@ export default function SoalCard({
               <div className="flex items-center space-x-2">
                 <Sparkles className="h-4 w-4 text-indigo-400" />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-200">
-                  Hasil Analisis AI
+                  Hasil Analisis Jawaban & Integritas
                 </span>
               </div>
 
@@ -479,8 +481,9 @@ export default function SoalCard({
                   <span>Kesesuaian: {soal.analisis.kesesuaianPersen}%</span>
                 </div>
 
-                {/* Indikasi AI */}
+                {/* Indikasi Jawaban AI */}
                 <div
+                  title="Mendeteksi apakah susunan kalimat dihasilkan oleh bot / kecerdasan buatan"
                   className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
                     soal.analisis.indikasiAiPersen > 60
                       ? "bg-rose-950/80 border-rose-800/80 text-rose-300"
@@ -492,6 +495,24 @@ export default function SoalCard({
                   <Bot className="h-3.5 w-3.5" />
                   <span>Indikasi AI: {soal.analisis.indikasiAiPersen}%</span>
                   <span className="text-[10px] font-normal text-slate-400">({soal.analisis.aiDugaanKategori})</span>
+                </div>
+
+                {/* Indikasi Plagiarisme Internet */}
+                <div
+                  title="Mendeteksi kemiripan kata-kata dengan materi di internet / website / modul umum"
+                  className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
+                    (soal.analisis.indikasiPlagiarismePersen || 0) > 60
+                      ? "bg-purple-950/80 border-purple-800/80 text-purple-300"
+                      : (soal.analisis.indikasiPlagiarismePersen || 0) > 30
+                      ? "bg-amber-950/80 border-amber-800/80 text-amber-300"
+                      : "bg-teal-950/80 border-teal-800/80 text-teal-300"
+                  }`}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  <span>Plagiarisme Web: {soal.analisis.indikasiPlagiarismePersen ?? 0}%</span>
+                  <span className="text-[10px] font-normal text-slate-400">
+                    ({soal.analisis.plagiarismeKategori || "Bebas Plagiasi"})
+                  </span>
                 </div>
               </div>
             </div>
@@ -513,7 +534,7 @@ export default function SoalCard({
                 }}
                 className="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer"
               >
-                <span>{showDetail ? "Tutup Rincian" : "Lihat Rincian Analisis"}</span>
+                <span>{showDetail ? "Tutup Rincian" : "Lihat Rincian AI vs Plagiarisme"}</span>
                 {showDetail ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
             </div>
@@ -525,34 +546,89 @@ export default function SoalCard({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-3 pt-3 border-t border-slate-800/90 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs"
+                  className="mt-3 pt-3 border-t border-slate-800/90 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs"
                 >
-                  {/* Indikator AI Terdeteksi */}
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="font-bold text-slate-200 block mb-1.5 flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
-                      Ciri & Indikator AI Terdeteksi:
-                    </span>
-                    {soal.analisis.ciriCiriAiTerdeteksi && soal.analisis.ciriCiriAiTerdeteksi.length > 0 ? (
-                      <ul className="list-disc list-inside space-y-1 text-slate-400">
-                        {soal.analisis.ciriCiriAiTerdeteksi.map((ciri, i) => (
-                          <li key={i}>{ciri}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-slate-400 italic">Tidak ditemukan pola khas AI.</p>
-                    )}
+                  {/* Indikator 1: Deteksi AI (Generator Sintetis) */}
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                    <div>
+                      <span className="font-bold text-slate-200 block mb-1.5 flex items-center gap-1.5">
+                        <Bot className="h-3.5 w-3.5 text-indigo-400" />
+                        Analisis Jawaban AI:
+                      </span>
+                      <p className="text-[11px] text-slate-400 mb-2 leading-tight">
+                        Mengecek apakah susunan kalimat dibuat bot AI atau murni rangkaian kata siswa.
+                      </p>
+                      {soal.analisis.ciriCiriAiTerdeteksi && soal.analisis.ciriCiriAiTerdeteksi.length > 0 ? (
+                        <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px]">
+                          {soal.analisis.ciriCiriAiTerdeteksi.map((ciri, i) => (
+                            <li key={i}>{ciri}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-emerald-400/90 text-[11px] font-medium flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" /> Pola kalimat alami, tidak ada ciri kaku AI.
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-800/60 text-[10px] text-slate-400">
+                      Status AI: <strong className="text-slate-200">{soal.analisis.aiDugaanKategori}</strong>
+                    </div>
                   </div>
 
-                  {/* Saran & Rekomendasi Guru */}
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="font-bold text-slate-200 block mb-1.5 flex items-center gap-1">
-                      <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                      Saran Guru / Evaluator:
-                    </span>
-                    <p className="text-slate-300 leading-relaxed italic">
-                      &quot;{soal.analisis.rekomendasiGuru}&quot;
-                    </p>
+                  {/* Indikator 2: Deteksi Plagiarisme (Kemiripan Sumber Web / Internet) */}
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                    <div>
+                      <span className="font-bold text-slate-200 block mb-1.5 flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5 text-teal-400" />
+                        Analisis Plagiarisme Internet:
+                      </span>
+                      <p className="text-[11px] text-slate-400 mb-2 leading-tight">
+                        Mengecek kemiripan teks dengan sumber internet, buku online, atau web tanya-jawab.
+                      </p>
+                      <p className="text-slate-300 text-[11px] leading-relaxed mb-2">
+                        {soal.analisis.detailPlagiarisme ||
+                          (soal.analisis.indikasiPlagiarismePersen && soal.analisis.indikasiPlagiarismePersen > 30
+                            ? "Terdapat kemiripan frasa kalimat dengan materi yang beredar di web."
+                            : "Tidak terdeteksi copy-paste dari sumber internet.")}
+                      </p>
+                      {soal.analisis.indikasiSumberPlagiarisme && soal.analisis.indikasiSumberPlagiarisme.length > 0 && (
+                        <div className="mt-1 space-y-1">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                            Dugaan Rujukan:
+                          </span>
+                          <ul className="list-disc list-inside text-[11px] text-teal-300/90">
+                            {soal.analisis.indikasiSumberPlagiarisme.map((sbr, idx) => (
+                              <li key={idx}>{sbr}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-800/60 text-[10px] text-slate-400">
+                      Kategori:{" "}
+                      <strong className="text-teal-300">
+                        {soal.analisis.plagiarismeKategori || "Bebas Plagiasi"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Indikator 3: Rekomendasi Guru & Catatan Evaluasi */}
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                    <div>
+                      <span className="font-bold text-slate-200 block mb-1.5 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                        Rekomendasi & Bimbingan Guru:
+                      </span>
+                      <p className="text-slate-300 leading-relaxed italic text-[11px]">
+                        &quot;{soal.analisis.rekomendasiGuru}&quot;
+                      </p>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-800/60 text-[10px] text-slate-400 flex items-center justify-between">
+                      <span>Bobot Terpenuhi:</span>
+                      <strong className="text-indigo-300">
+                        {soal.analisis.nilaiDiberikan} / {soal.nilaiMaksimal} Poin
+                      </strong>
+                    </div>
                   </div>
                 </motion.div>
               )}

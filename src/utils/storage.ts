@@ -103,6 +103,7 @@ export function createDefaultSession(): SesiPenilaian {
     totalNilaiMaksimal: 10,
     nilaiSkala100: 0,
     rataRataAiPersen: 0,
+    rataRataPlagiarismePersen: 0,
     rataRataKesesuaianPersen: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -114,6 +115,7 @@ export function calculateSessionTotals(soalList: SoalItem[]) {
   let totalMaks = 0;
   let totalKesesuaian = 0;
   let totalAi = 0;
+  let totalPlagiat = 0;
   let analyzedCount = 0;
 
   for (const s of soalList) {
@@ -122,6 +124,7 @@ export function calculateSessionTotals(soalList: SoalItem[]) {
       totalDiberikan += s.analisis.nilaiDiberikan || 0;
       totalKesesuaian += s.analisis.kesesuaianPersen || 0;
       totalAi += s.analisis.indikasiAiPersen || 0;
+      totalPlagiat += s.analisis.indikasiPlagiarismePersen || 0;
       analyzedCount += 1;
     }
   }
@@ -129,6 +132,7 @@ export function calculateSessionTotals(soalList: SoalItem[]) {
   const skala100 = totalMaks > 0 ? Math.round((totalDiberikan / totalMaks) * 100 * 10) / 10 : 0;
   const avgKesesuaian = analyzedCount > 0 ? Math.round(totalKesesuaian / analyzedCount) : 0;
   const avgAi = analyzedCount > 0 ? Math.round(totalAi / analyzedCount) : 0;
+  const avgPlagiat = analyzedCount > 0 ? Math.round(totalPlagiat / analyzedCount) : 0;
 
   return {
     totalNilaiDiberikan: Math.round(totalDiberikan * 10) / 10,
@@ -136,6 +140,7 @@ export function calculateSessionTotals(soalList: SoalItem[]) {
     nilaiSkala100: skala100,
     rataRataKesesuaianPersen: avgKesesuaian,
     rataRataAiPersen: avgAi,
+    rataRataPlagiarismePersen: avgPlagiat,
     analyzedCount,
     totalCount: soalList.length,
   };

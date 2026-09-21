@@ -305,8 +305,8 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                     >
                       Laporan Hasil Penilaian & Analisis Orisinalitas Siswa
                     </h2>
-                    <p style={{ margin: 0, fontSize: "10.5px", color: "#64748b" }}>
-                      Rekapitulasi evaluasi bobot jawaban, ketepatan substansi, serta identifikasi indikator kecerdasan buatan
+                    <p style={{ margin: 0, fontSize: "10px", color: "#64748b" }}>
+                      Rekapitulasi evaluasi bobot nilai, akurasi konsep, deteksi jawaban AI, serta analisis kemiripan plagiarisme sumber internet
                     </p>
                   </div>
                 )}
@@ -348,7 +348,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                       border: "1px solid #e2e8f0",
                       borderRadius: "6px",
                       padding: "10px 14px",
-                      marginBottom: "16px",
+                      marginBottom: "14px",
                       fontSize: "11px",
                     }}
                   >
@@ -379,14 +379,14 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                   </div>
                 )}
 
-                {/* 4 KOTAK RINGKASAN METRIK NILAI (HALAMAN 1) */}
+                {/* 5 KOTAK RINGKASAN METRIK NILAI & INTEGRITAS (HALAMAN 1) */}
                 {page.isFirst && (
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(4, 1fr)",
-                      gap: "8px",
-                      marginBottom: "18px",
+                      gridTemplateColumns: "repeat(5, 1fr)",
+                      gap: "6px",
+                      marginBottom: "16px",
                     }}
                   >
                     {/* Box 1: Total Poin */}
@@ -395,18 +395,18 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                         backgroundColor: "#f8fafc",
                         border: "1px solid #e2e8f0",
                         borderRadius: "6px",
-                        padding: "8px 6px",
+                        padding: "7px 4px",
                         textAlign: "center",
                       }}
                     >
-                      <div style={{ fontSize: "9px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                         Total Nilai
                       </div>
-                      <div style={{ fontSize: "17px", fontWeight: 900, color: "#0f172a", margin: "2px 0" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 900, color: "#0f172a", margin: "2px 0" }}>
                         {stats.totalNilaiDiberikan}
                       </div>
-                      <div style={{ fontSize: "9.5px", color: "#64748b" }}>
-                        dari maks {stats.totalNilaiMaksimal}
+                      <div style={{ fontSize: "9px", color: "#64748b" }}>
+                        dari {stats.totalNilaiMaksimal}
                       </div>
                     </div>
 
@@ -416,13 +416,13 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                         backgroundColor: stats.nilaiSkala100 >= 75 ? "#ecfdf5" : stats.nilaiSkala100 >= 60 ? "#fffbeb" : "#fef2f2",
                         border: `1px solid ${stats.nilaiSkala100 >= 75 ? "#a7f3d0" : stats.nilaiSkala100 >= 60 ? "#fde68a" : "#fecaca"}`,
                         borderRadius: "6px",
-                        padding: "8px 6px",
+                        padding: "7px 4px",
                         textAlign: "center",
                       }}
                     >
                       <div
                         style={{
-                          fontSize: "9px",
+                          fontSize: "8.5px",
                           fontWeight: 700,
                           color: stats.nilaiSkala100 >= 75 ? "#065f46" : stats.nilaiSkala100 >= 60 ? "#92400e" : "#991b1b",
                           textTransform: "uppercase",
@@ -432,7 +432,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                       </div>
                       <div
                         style={{
-                          fontSize: "17px",
+                          fontSize: "16px",
                           fontWeight: 900,
                           color: stats.nilaiSkala100 >= 75 ? "#047857" : stats.nilaiSkala100 >= 60 ? "#b45309" : "#dc2626",
                           margin: "2px 0",
@@ -442,7 +442,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                       </div>
                       <div
                         style={{
-                          fontSize: "9.5px",
+                          fontSize: "9px",
                           fontWeight: 700,
                           color: stats.nilaiSkala100 >= 75 ? "#059669" : stats.nilaiSkala100 >= 60 ? "#d97706" : "#ef4444",
                         }}
@@ -457,17 +457,17 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                         backgroundColor: "#eff6ff",
                         border: "1px solid #bfdbfe",
                         borderRadius: "6px",
-                        padding: "8px 6px",
+                        padding: "7px 4px",
                         textAlign: "center",
                       }}
                     >
-                      <div style={{ fontSize: "9px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase" }}>
-                        Rerata Kesesuaian
+                      <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase" }}>
+                        Kesesuaian
                       </div>
-                      <div style={{ fontSize: "17px", fontWeight: 900, color: "#1d4ed8", margin: "2px 0" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 900, color: "#1d4ed8", margin: "2px 0" }}>
                         {stats.rataRataKesesuaianPersen}%
                       </div>
-                      <div style={{ fontSize: "9.5px", color: "#2563eb", fontWeight: 600 }}>
+                      <div style={{ fontSize: "9px", color: "#2563eb", fontWeight: 600 }}>
                         Akurasi Materi
                       </div>
                     </div>
@@ -481,24 +481,24 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           stats.rataRataAiPersen > 60 ? "#fecdd3" : stats.rataRataAiPersen > 30 ? "#fde68a" : "#bbf7d0"
                         }`,
                         borderRadius: "6px",
-                        padding: "8px 6px",
+                        padding: "7px 4px",
                         textAlign: "center",
                       }}
                     >
                       <div
                         style={{
-                          fontSize: "9px",
+                          fontSize: "8.5px",
                           fontWeight: 700,
                           color:
                             stats.rataRataAiPersen > 60 ? "#9f1239" : stats.rataRataAiPersen > 30 ? "#92400e" : "#166534",
                           textTransform: "uppercase",
                         }}
                       >
-                        Rerata Indikasi AI
+                        Indikasi AI
                       </div>
                       <div
                         style={{
-                          fontSize: "17px",
+                          fontSize: "16px",
                           fontWeight: 900,
                           color:
                             stats.rataRataAiPersen > 60 ? "#be123c" : stats.rataRataAiPersen > 30 ? "#b45309" : "#15803d",
@@ -509,7 +509,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                       </div>
                       <div
                         style={{
-                          fontSize: "9.5px",
+                          fontSize: "9px",
                           fontWeight: 700,
                           color:
                             stats.rataRataAiPersen > 60 ? "#e11d48" : stats.rataRataAiPersen > 30 ? "#d97706" : "#16a34a",
@@ -518,8 +518,79 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                         {stats.rataRataAiPersen > 60
                           ? "Dominan AI"
                           : stats.rataRataAiPersen > 30
-                          ? "Campuran AI"
-                          : "Aman (Orisinal)"}
+                          ? "Campuran"
+                          : "Orisinal"}
+                      </div>
+                    </div>
+
+                    {/* Box 5: Plagiarisme Web */}
+                    <div
+                      style={{
+                        backgroundColor:
+                          stats.rataRataPlagiarismePersen > 60
+                            ? "#faf5ff"
+                            : stats.rataRataPlagiarismePersen > 30
+                            ? "#fffbeb"
+                            : "#f0fdfa",
+                        border: `1px solid ${
+                          stats.rataRataPlagiarismePersen > 60
+                            ? "#e9d5ff"
+                            : stats.rataRataPlagiarismePersen > 30
+                            ? "#fde68a"
+                            : "#99f6e4"
+                        }`,
+                        borderRadius: "6px",
+                        padding: "7px 4px",
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "8.5px",
+                          fontWeight: 700,
+                          color:
+                            stats.rataRataPlagiarismePersen > 60
+                              ? "#6b21a8"
+                              : stats.rataRataPlagiarismePersen > 30
+                              ? "#92400e"
+                              : "#115e59",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Plagiat Web
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "16px",
+                          fontWeight: 900,
+                          color:
+                            stats.rataRataPlagiarismePersen > 60
+                              ? "#7e22ce"
+                              : stats.rataRataPlagiarismePersen > 30
+                              ? "#b45309"
+                              : "#0f766e",
+                          margin: "2px 0",
+                        }}
+                      >
+                        {stats.rataRataPlagiarismePersen}%
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "9px",
+                          fontWeight: 700,
+                          color:
+                            stats.rataRataPlagiarismePersen > 60
+                              ? "#9333ea"
+                              : stats.rataRataPlagiarismePersen > 30
+                              ? "#d97706"
+                              : "#0d9488",
+                        }}
+                      >
+                        {stats.rataRataPlagiarismePersen > 60
+                          ? "Tinggi"
+                          : stats.rataRataPlagiarismePersen > 30
+                          ? "Sedang"
+                          : "Bebas Web"}
                       </div>
                     </div>
                   </div>
@@ -552,32 +623,35 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                       width: "100%",
                       borderCollapse: "collapse",
                       border: "1px solid #cbd5e1",
-                      fontSize: "10.5px",
+                      fontSize: "10px",
                       tableLayout: "fixed",
                     }}
                   >
                     <thead>
                       <tr style={{ backgroundColor: "#f1f5f9", borderBottom: "1.5px solid #94a3b8" }}>
-                        <th style={{ width: "32px", padding: "7px 4px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
+                        <th style={{ width: "30px", padding: "7px 3px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
                           No
                         </th>
-                        <th style={{ width: "185px", padding: "7px 8px", textAlign: "left", fontWeight: 800, color: "#1e293b" }}>
+                        <th style={{ width: "160px", padding: "7px 6px", textAlign: "left", fontWeight: 800, color: "#1e293b" }}>
                           Pertanyaan / Soal
                         </th>
-                        <th style={{ width: "180px", padding: "7px 8px", textAlign: "left", fontWeight: 800, color: "#1e293b" }}>
+                        <th style={{ width: "155px", padding: "7px 6px", textAlign: "left", fontWeight: 800, color: "#1e293b" }}>
                           Jawaban Siswa
                         </th>
-                        <th style={{ width: "65px", padding: "7px 4px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
+                        <th style={{ width: "55px", padding: "7px 3px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
                           Nilai
                         </th>
-                        <th style={{ width: "70px", padding: "7px 4px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
+                        <th style={{ width: "62px", padding: "7px 3px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
                           Kesesuaian
                         </th>
-                        <th style={{ width: "70px", padding: "7px 4px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
+                        <th style={{ width: "64px", padding: "7px 3px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
                           Indikasi AI
                         </th>
-                        <th style={{ width: "148px", padding: "7px 8px", textAlign: "left", fontWeight: 800, color: "#1e293b" }}>
-                          Catatan & Kategori
+                        <th style={{ width: "64px", padding: "7px 3px", textAlign: "center", fontWeight: 800, color: "#1e293b" }}>
+                          Plagiat Web
+                        </th>
+                        <th style={{ width: "160px", padding: "7px 6px", textAlign: "left", fontWeight: 800, color: "#1e293b" }}>
+                          Catatan & Integritas
                         </th>
                       </tr>
                     </thead>
@@ -593,7 +667,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           {/* Nomor */}
                           <td
                             style={{
-                              padding: "8px 4px",
+                              padding: "8px 3px",
                               textAlign: "center",
                               fontWeight: 700,
                               color: "#334155",
@@ -606,14 +680,14 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           {/* Soal */}
                           <td
                             style={{
-                              padding: "8px 8px",
+                              padding: "8px 6px",
                               color: "#1e293b",
                               verticalAlign: "top",
                               wordBreak: "break-word",
                             }}
                           >
                             {soal.naskahSoal?.trim() ? (
-                              <div style={{ lineHeight: 1.4 }}>{soal.naskahSoal.trim()}</div>
+                              <div style={{ lineHeight: 1.35 }}>{soal.naskahSoal.trim()}</div>
                             ) : (
                               <div style={{ color: "#64748b", fontStyle: "italic" }}>
                                 {soal.gambarSoalFileName
@@ -626,14 +700,14 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           {/* Jawaban */}
                           <td
                             style={{
-                              padding: "8px 8px",
+                              padding: "8px 6px",
                               color: "#1e293b",
                               verticalAlign: "top",
                               wordBreak: "break-word",
                             }}
                           >
                             {soal.jawabanTeks?.trim() ? (
-                              <div style={{ lineHeight: 1.4 }}>{soal.jawabanTeks.trim()}</div>
+                              <div style={{ lineHeight: 1.35 }}>{soal.jawabanTeks.trim()}</div>
                             ) : soal.jawabanGambarBase64 ? (
                               <div style={{ color: "#4338ca", fontStyle: "italic" }}>
                                 [Foto/Berkas Jawaban Terlampir]
@@ -648,15 +722,15 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           {/* Nilai */}
                           <td
                             style={{
-                              padding: "8px 4px",
+                              padding: "8px 3px",
                               textAlign: "center",
                               verticalAlign: "top",
                             }}
                           >
-                            <span style={{ fontWeight: 800, fontSize: "11.5px", color: "#0f172a" }}>
+                            <span style={{ fontWeight: 800, fontSize: "11px", color: "#0f172a" }}>
                               {soal.analisis ? soal.analisis.nilaiDiberikan : 0}
                             </span>
-                            <span style={{ fontSize: "9.5px", color: "#64748b", display: "block" }}>
+                            <span style={{ fontSize: "9px", color: "#64748b", display: "block" }}>
                               / {soal.nilaiMaksimal}
                             </span>
                           </td>
@@ -664,7 +738,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           {/* Kesesuaian */}
                           <td
                             style={{
-                              padding: "8px 4px",
+                              padding: "8px 3px",
                               textAlign: "center",
                               verticalAlign: "top",
                             }}
@@ -677,7 +751,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                                   color: "#1d4ed8",
                                   backgroundColor: "#eff6ff",
                                   border: "1px solid #bfdbfe",
-                                  padding: "2px 5px",
+                                  padding: "2px 4px",
                                   borderRadius: "4px",
                                 }}
                               >
@@ -691,7 +765,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                           {/* Indikasi AI */}
                           <td
                             style={{
-                              padding: "8px 4px",
+                              padding: "8px 3px",
                               textAlign: "center",
                               verticalAlign: "top",
                             }}
@@ -720,7 +794,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                                       ? "#fde68a"
                                       : "#bbf7d0"
                                   }`,
-                                  padding: "2px 5px",
+                                  padding: "2px 4px",
                                   borderRadius: "4px",
                                 }}
                               >
@@ -731,13 +805,56 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                             )}
                           </td>
 
+                          {/* Indikasi Plagiat Web */}
+                          <td
+                            style={{
+                              padding: "8px 3px",
+                              textAlign: "center",
+                              verticalAlign: "top",
+                            }}
+                          >
+                            {soal.analisis ? (
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  fontWeight: 700,
+                                  color:
+                                    (soal.analisis.indikasiPlagiarismePersen || 0) > 60
+                                      ? "#7e22ce"
+                                      : (soal.analisis.indikasiPlagiarismePersen || 0) > 30
+                                      ? "#b45309"
+                                      : "#0f766e",
+                                  backgroundColor:
+                                    (soal.analisis.indikasiPlagiarismePersen || 0) > 60
+                                      ? "#faf5ff"
+                                      : (soal.analisis.indikasiPlagiarismePersen || 0) > 30
+                                      ? "#fffbeb"
+                                      : "#f0fdfa",
+                                  border: `1px solid ${
+                                    (soal.analisis.indikasiPlagiarismePersen || 0) > 60
+                                      ? "#e9d5ff"
+                                      : (soal.analisis.indikasiPlagiarismePersen || 0) > 30
+                                      ? "#fde68a"
+                                      : "#99f6e4"
+                                  }`,
+                                  padding: "2px 4px",
+                                  borderRadius: "4px",
+                                }}
+                              >
+                                {soal.analisis.indikasiPlagiarismePersen ?? 0}%
+                              </span>
+                            ) : (
+                              <span style={{ color: "#94a3b8" }}>-</span>
+                            )}
+                          </td>
+
                           {/* Catatan Analisis */}
                           <td
                             style={{
-                              padding: "8px 8px",
+                              padding: "8px 6px",
                               verticalAlign: "top",
                               color: "#334155",
-                              fontSize: "10px",
+                              fontSize: "9.5px",
                               lineHeight: 1.35,
                               wordBreak: "break-word",
                             }}
@@ -745,7 +862,7 @@ export default function ReportModal({ session, darkMode, onClose }: ReportModalP
                             {soal.analisis ? (
                               <div>
                                 <div style={{ fontWeight: 700, color: "#1e293b", marginBottom: "2px" }}>
-                                  {soal.analisis.aiDugaanKategori}
+                                  AI: {soal.analisis.aiDugaanKategori} • Web: {soal.analisis.plagiarismeKategori || "Bebas"}
                                 </div>
                                 <div style={{ color: "#475569" }}>
                                   {soal.analisis.ringkasanAnalisis}

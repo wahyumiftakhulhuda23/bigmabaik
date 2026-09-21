@@ -25,14 +25,21 @@ export interface KeyCheckResult {
 }
 
 export const COMPACT_SYSTEM_PROMPT = `Anda adalah penilai ujian "BigMA Baik" untuk guru di Indonesia.
-Analisis jawaban siswa secara objektif & cermat:
-1. Kesesuaian (0-100%): akurasi & kelengkapan jawaban thd soal.
-2. Indikasi AI (0-100%): deteksi pola kalimat kaku AI / boilerplate vs gaya alami siswa.
-3. Nilai Diberikan: skor 0 sampai nilaiMaksimal sesuai mutu jawaban dan integritas.
-Kembalikan format JSON persis sesuai struktur:
+Lakukan analisis jawaban siswa secara objektif, cermat, dan komprehensif:
+
+1. Kesesuaian Materi (0-100%): Tingkat ketepatan, kelengkapan konsep, dan kebenaran jawaban siswa terhadap pertanyaan/soal yang diajukan.
+2. Indikasi Jawaban AI (0-100%): Deteksi apakah susunan kalimat dihasilkan oleh kecerdasan buatan / LLM (seperti ChatGPT, Gemini, Claude) dengan ciri khas gaya bahasa sintetik kaku, struktur poin berulang, kata transisi formal berlebih, atau murni dari pemikiran & gaya bahasa siswa sendiri.
+3. Indikasi Plagiarisme Internet (0-100%): Deteksi apakah jawaban siswa merupakan hasil salin-tempel (copy-paste) atau kemiripan kata-demi-kata (verbatim/parafrasa dangkal) dari sumber internet, artikel website, blog edukasi, Wikipedia, kunci jawaban daring (seperti Brainly/Roboguru), atau buku materi umum. (Perbedaan: Indikasi AI mendeteksi generator AI, sedangkan Plagiarisme mendeteksi kemiripan teks dengan referensi di internet/web).
+4. Nilai Diberikan: Skor angka dari 0 sampai nilaiMaksimal berdasarkan mutu konten serta kejujuran akademik.
+
+Kembalikan format JSON persis sesuai struktur berikut:
 {
   "kesesuaianPersen": number,
   "indikasiAiPersen": number,
+  "indikasiPlagiarismePersen": number,
+  "plagiarismeKategori": "Bebas Plagiasi" | "Kemiripan Rendah" | "Kemiripan Sedang" | "Terindikasi Plagiat Web",
+  "indikasiSumberPlagiarisme": string[],
+  "detailPlagiarisme": string,
   "nilaiDiberikan": number,
   "aiDugaanKategori": "Asli Siswa" | "Didominasi Siswa" | "Campuran AI" | "Didominasi AI" | "Murni AI",
   "ringkasanAnalisis": string,
@@ -160,15 +167,29 @@ export function safeParseAnalysisJson(rawText: string, maxVal: number): any {
   // 3. Fallback regex extraction
   const kesesuaianMatch = clean.match(/kesesuaianPersen["\s:]+(\d+)/i);
   const indikasiMatch = clean.match(/indikasiAiPersen["\s:]+(\d+)/i);
+  const plagiatMatch = clean.match(/indikasiPlagiarismePersen["\s:]+(\d+)/i);
+  const plagiatKatMatch = clean.match(/plagiarismeKategori["\s:]+"([^"]+)"/i);
   const nilaiMatch = clean.match(/nilaiDiberikan["\s:]+([\d.]+)/i);
   const kategoriMatch = clean.match(/aiDugaanKategori["\s:]+"([^"]+)"/i);
   const ringkasanMatch = clean.match(/ringkasanAnalisis["\s:]+"([^"]+)"/i);
+  const detailPlagiatMatch = clean.match(/detailPlagiarisme["\s:]+"([^"]+)"/i);
   const rekomendasiMatch = clean.match(/rekomendasiGuru["\s:]+"([^"]+)"/i);
 
   if (kesesuaianMatch || nilaiMatch || ringkasanMatch || clean.length > 10) {
+    const defaultPlagiat = plagiatMatch ? Number(plagiatMatch[1]) : 10;
     return {
       kesesuaianPersen: kesesuaianMatch ? Number(kesesuaianMatch[1]) : 75,
       indikasiAiPersen: indikasiMatch ? Number(indikasiMatch[1]) : 15,
+      indikasiPlagiarismePersen: defaultPlagiat,
+      plagiarismeKategori: plagiatKatMatch
+        ? plagiatKatMatch[1]
+        : defaultPlagiat > 50
+        ? "Terindikasi Plagiat Web"
+        : defaultPlagiat > 25
+        ? "Kemiripan Sedang"
+        : "Bebas Plagiasi",
+      indikasiSumberPlagiarisme: [],
+      detailPlagiarisme: detailPlagiatMatch ? detailPlagiatMatch[1] : "Tidak terdeteksi kesamaan kalimat signifikan dengan sumber web.",
       nilaiDiberikan: nilaiMatch ? Number(nilaiMatch[1]) : Math.round(maxVal * 0.75),
       aiDugaanKategori: kategoriMatch ? kategoriMatch[1] : "Asli Siswa",
       ringkasanAnalisis:
@@ -421,12 +442,31 @@ export async function analyzeWithKeyRotation(
         const clampedNilai = Math.max(0, Math.min(maxVal, Number(parsed.nilaiDiberikan) || 0));
         const clampedKesesuaian = Math.max(0, Math.min(100, Math.round(Number(parsed.kesesuaianPersen) || 0)));
         const clampedAi = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiAiPersen) || 0)));
+        const clampedPlagiat = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiPlagiarismePersen) || 0)));
+
+        let plagiatKategori = parsed.plagiarismeKategori;
+        if (!plagiatKategori) {
+          if (clampedPlagiat > 60) plagiatKategori = "Terindikasi Plagiat Web";
+          else if (clampedPlagiat > 30) plagiatKategori = "Kemiripan Sedang";
+          else if (clampedPlagiat > 15) plagiatKategori = "Kemiripan Rendah";
+          else plagiatKategori = "Bebas Plagiasi";
+        }
 
         return {
           soalId: soal.id,
           nomorSoal: soal.nomorSoal,
           kesesuaianPersen: clampedKesesuaian,
           indikasiAiPersen: clampedAi,
+          indikasiPlagiarismePersen: clampedPlagiat,
+          plagiarismeKategori: plagiatKategori,
+          indikasiSumberPlagiarisme: Array.isArray(parsed.indikasiSumberPlagiarisme)
+            ? parsed.indikasiSumberPlagiarisme
+            : [],
+          detailPlagiarisme:
+            parsed.detailPlagiarisme ||
+            (clampedPlagiat > 40
+              ? "Ditemukan kesamaan struktur kalimat dan frasa spesifik dengan materi yang ada di internet."
+              : "Rangkaian kata dan penjelasan tergolong alami dan orisinal dari pemahaman siswa."),
           nilaiDiberikan: Math.round(clampedNilai * 10) / 10,
           nilaiMaksimal: maxVal,
           aiDugaanKategori: parsed.aiDugaanKategori || "Asli Siswa",
