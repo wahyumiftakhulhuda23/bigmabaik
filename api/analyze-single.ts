@@ -10,7 +10,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Metode tidak diizinkan. Gunakan POST." });
+    return res.status(405).json({ success: false, error: "Metode tidak diizinkan. Gunakan POST." });
   }
 
   try {
@@ -26,7 +26,7 @@ export default async function handler(req: any, res: any) {
     if (!body || (!body.naskahSoal && !body.gambarSoalBase64)) {
       return res.status(400).json({
         success: false,
-        error: "Data soal belum lengkap. Masukkan naskah soal atau lampiran gambar soal.",
+        error: "Data soal belum lengkap. Masukkan naskah soal atau lampiran foto soal.",
       });
     }
 
@@ -36,8 +36,8 @@ export default async function handler(req: any, res: any) {
       result,
     });
   } catch (err: any) {
-    console.error("Vercel analyze-single exception:", err);
-    return res.status(400).json({
+    console.error("Vercel analyze-single error:", err);
+    return res.status(200).json({
       success: false,
       error: err?.message || "Gagal melakukan analisis jawaban.",
     });

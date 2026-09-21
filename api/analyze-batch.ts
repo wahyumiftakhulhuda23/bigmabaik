@@ -10,7 +10,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Metode tidak diizinkan. Gunakan POST." });
+    return res.status(405).json({ success: false, error: "Metode tidak diizinkan. Gunakan POST." });
   }
 
   try {
@@ -37,8 +37,8 @@ export default async function handler(req: any, res: any) {
       results,
     });
   } catch (err: any) {
-    console.error("Vercel analyze-batch exception:", err);
-    return res.status(400).json({
+    console.error("Vercel analyze-batch error:", err);
+    return res.status(200).json({
       success: false,
       error: err?.message || "Gagal memproses analisis massal.",
     });

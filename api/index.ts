@@ -35,7 +35,7 @@ export default async function handler(req: any, res: any) {
       const results = await verifyKeysCore(rawKeys);
       return res.status(200).json({ success: true, results });
     } catch (err: any) {
-      return res.status(500).json({
+      return res.status(200).json({
         success: false,
         error: err?.message || "Gagal memverifikasi API key.",
       });
@@ -55,7 +55,7 @@ export default async function handler(req: any, res: any) {
       const results = await analyzeBatchCore(soalList, apiKeys);
       return res.status(200).json({ success: true, results });
     } catch (err: any) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
         error: err?.message || "Gagal memproses analisis massal.",
       });
@@ -80,7 +80,7 @@ export default async function handler(req: any, res: any) {
       const result = await analyzeSingleCore(body);
       return res.status(200).json({ success: true, result });
     } catch (err: any) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
         error: err?.message || "Gagal melakukan analisis jawaban.",
       });

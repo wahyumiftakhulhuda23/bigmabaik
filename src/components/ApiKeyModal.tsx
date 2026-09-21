@@ -15,20 +15,13 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { getStoredApiKeysRaw, saveStoredApiKeys, getStoredApiKeys } from "../utils/storage";
 import { sound } from "../utils/audio";
-import { safeFetchJson } from "../utils/apiHelper";
+import { verifyApiKeys, KeyCheckResult } from "../utils/geminiClient";
 
 interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
   darkMode?: boolean;
   onKeysUpdated: (keys: string[]) => void;
-}
-
-interface KeyCheckResult {
-  key: string;
-  index: number;
-  status: "ready" | "exhausted" | "invalid" | "error";
-  message: string;
 }
 
 export default function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps) {
@@ -66,16 +59,11 @@ export default function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyMo
     setGeneralError(null);
 
     try {
-      const data = await safeFetchJson<{ results?: KeyCheckResult[] }>("/api/verify-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keys: detectedKeys }),
-      });
-
+      const results = await verifyApiKeys(detectedKeys);
       const resultsMap: Record<string, KeyCheckResult> = {};
 
-      if (data.results && Array.isArray(data.results)) {
-        data.results.forEach((r: KeyCheckResult) => {
+      if (results && Array.isArray(results)) {
+        results.forEach((r: KeyCheckResult) => {
           resultsMap[r.key] = r;
         });
       }

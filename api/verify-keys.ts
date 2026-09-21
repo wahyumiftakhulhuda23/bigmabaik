@@ -1,7 +1,6 @@
 import { verifyKeysCore } from "./_gemini";
 
 export default async function handler(req: any, res: any) {
-  // Always set CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -11,7 +10,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Metode tidak diizinkan. Gunakan POST." });
+    return res.status(405).json({ success: false, error: "Metode tidak diizinkan. Gunakan POST." });
   }
 
   try {
@@ -38,10 +37,10 @@ export default async function handler(req: any, res: any) {
       results,
     });
   } catch (err: any) {
-    console.error("Vercel verify-keys exception:", err);
-    return res.status(500).json({
+    console.error("Vercel verify-keys error:", err);
+    return res.status(200).json({
       success: false,
-      error: err?.message || "Terjadi kendala saat memverifikasi API key.",
+      error: err?.message || "Gagal memverifikasi API key.",
     });
   }
 }

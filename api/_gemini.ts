@@ -1,7 +1,8 @@
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
 
-dotenv.config();
+try {
+  dotenv.config();
+} catch {}
 
 export interface QuestionAnalysisRequest {
   id: string;
@@ -13,7 +14,7 @@ export interface QuestionAnalysisRequest {
   jawabanTeks?: string;
   jawabanGambarBase64?: string | null;
   jawabanGambarMimeType?: string | null;
-  apiKeys?: string[]; // Multiple user-provided Gemini API keys (one per line)
+  apiKeys?: string[];
 }
 
 export interface KeyCheckResult {
@@ -23,68 +24,23 @@ export interface KeyCheckResult {
   message: string;
 }
 
-export const analysisSchema = {
-  type: Type.OBJECT,
-  properties: {
-    kesesuaianPersen: {
-      type: Type.NUMBER,
-      description: "Persentase kesesuaian jawaban siswa terhadap soal (0-100)",
-    },
-    indikasiAiPersen: {
-      type: Type.NUMBER,
-      description: "Persentase kemungkinan jawaban dibuat AI (0-100)",
-    },
-    nilaiDiberikan: {
-      type: Type.NUMBER,
-      description: "Nilai akhir berkisar 0 sampai nilaiMaksimal",
-    },
-    aiDugaanKategori: {
-      type: Type.STRING,
-      description: "Kategori: 'Asli Siswa', 'Didominasi Siswa', 'Campuran AI', 'Didominasi AI', atau 'Murni AI'",
-    },
-    ringkasanAnalisis: {
-      type: Type.STRING,
-      description: "Penjelasan ringkas 1-2 kalimat alasan penilaian dan indikasi AI",
-    },
-    ciriCiriAiTerdeteksi: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Ciri AI terdeteksi jika ada",
-    },
-    kelebihanJawaban: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Poin kelebihan jawaban",
-    },
-    kelemahanJawaban: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Poin kelemahan jawaban",
-    },
-    rekomendasiGuru: {
-      type: Type.STRING,
-      description: "Saran singkat untuk guru",
-    },
-  },
-  required: [
-    "kesesuaianPersen",
-    "indikasiAiPersen",
-    "nilaiDiberikan",
-    "aiDugaanKategori",
-    "ringkasanAnalisis",
-    "ciriCiriAiTerdeteksi",
-    "kelebihanJawaban",
-    "kelemahanJawaban",
-    "rekomendasiGuru",
-  ],
-};
-
 export const COMPACT_SYSTEM_PROMPT = `Anda adalah penilai ujian "BigMA Baik" untuk guru di Indonesia.
-Analisis jawaban siswa secara objektif & hemat token:
+Analisis jawaban siswa secara objektif & cermat:
 1. Kesesuaian (0-100%): akurasi & kelengkapan jawaban thd soal.
 2. Indikasi AI (0-100%): deteksi pola kalimat kaku AI / boilerplate vs gaya alami siswa.
 3. Nilai Diberikan: skor 0 sampai nilaiMaksimal sesuai mutu jawaban dan integritas.
-Kembalikan JSON sesuai schema.`;
+Kembalikan format JSON persis sesuai struktur:
+{
+  "kesesuaianPersen": number,
+  "indikasiAiPersen": number,
+  "nilaiDiberikan": number,
+  "aiDugaanKategori": "Asli Siswa" | "Didominasi Siswa" | "Campuran AI" | "Didominasi AI" | "Murni AI",
+  "ringkasanAnalisis": string,
+  "ciriCiriAiTerdeteksi": string[],
+  "kelebihanJawaban": string[],
+  "kelemahanJawaban": string[],
+  "rekomendasiGuru": string
+}`;
 
 export const CANDIDATE_MODELS = [
   "gemini-flash-latest",
@@ -93,9 +49,31 @@ export const CANDIDATE_MODELS = [
   "gemini-3.8-flash",
 ];
 
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function resolveCandidateKeys(customKeys?: string[]): string[] {
+  const result: string[] = [];
+
+  if (Array.isArray(customKeys)) {
+    for (const k of customKeys) {
+      const clean = (k || "").trim();
+      if (clean && !result.includes(clean)) {
+        result.push(clean);
+      }
+    }
+  }
+
+  const envKey = process.env.GEMINI_API_KEY?.trim();
+  if (envKey && !result.includes(envKey)) {
+    result.push(envKey);
+  }
+
+  return result;
+}
+
 export function isTransientError(err: any): boolean {
   const errMsg = String(err?.message || err || "");
-  const status = err?.status || err?.statusCode;
+  const status = err?.status || err?.statusCode || err?.code;
   return (
     status === 503 ||
     status === 500 ||
@@ -113,7 +91,7 @@ export function isTransientError(err: any): boolean {
 
 export function isInvalidKeyError(err: any): boolean {
   const errMsg = String(err?.message || err || "");
-  const status = err?.status || err?.statusCode;
+  const status = err?.status || err?.statusCode || err?.code;
   return (
     status === 400 ||
     status === 403 ||
@@ -126,7 +104,7 @@ export function isInvalidKeyError(err: any): boolean {
 
 export function isQuotaError(err: any): boolean {
   const errMsg = String(err?.message || err || "");
-  const status = err?.status || err?.statusCode;
+  const status = err?.status || err?.statusCode || err?.code;
   return (
     status === 429 ||
     errMsg.includes("429") ||
@@ -179,7 +157,7 @@ export function safeParseAnalysisJson(rawText: string, maxVal: number): any {
     } catch {}
   }
 
-  // 3. Fallback extraction via regex
+  // 3. Fallback regex extraction
   const kesesuaianMatch = clean.match(/kesesuaianPersen["\s:]+(\d+)/i);
   const indikasiMatch = clean.match(/indikasiAiPersen["\s:]+(\d+)/i);
   const nilaiMatch = clean.match(/nilaiDiberikan["\s:]+([\d.]+)/i);
@@ -187,7 +165,7 @@ export function safeParseAnalysisJson(rawText: string, maxVal: number): any {
   const ringkasanMatch = clean.match(/ringkasanAnalisis["\s:]+"([^"]+)"/i);
   const rekomendasiMatch = clean.match(/rekomendasiGuru["\s:]+"([^"]+)"/i);
 
-  if (kesesuaianMatch || nilaiMatch || ringkasanMatch || clean.length > 20) {
+  if (kesesuaianMatch || nilaiMatch || ringkasanMatch || clean.length > 10) {
     return {
       kesesuaianPersen: kesesuaianMatch ? Number(kesesuaianMatch[1]) : 75,
       indikasiAiPersen: indikasiMatch ? Number(indikasiMatch[1]) : 15,
@@ -210,155 +188,177 @@ export function safeParseAnalysisJson(rawText: string, maxVal: number): any {
   throw new Error("Gagal membaca format JSON dari respons AI. Silakan klik tombol 'Analisis' kembali.");
 }
 
-export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Native REST call to Gemini v1beta generateContent
+ * Uses standard Node.js/browser fetch without any external binary dependencies.
+ */
+export async function callGeminiRest(
+  apiKey: string,
+  model: string,
+  parts: any[],
+  timeoutMs = 25000
+): Promise<{ text: string }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-export function resolveCandidateKeys(customKeys?: string[]): string[] {
-  const result: string[] = [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (Array.isArray(customKeys)) {
-    for (const k of customKeys) {
-      const clean = k.trim();
-      if (clean && !result.includes(clean)) {
-        result.push(clean);
-      }
+  try {
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: parts,
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
+      },
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let responseJson: any;
+    try {
+      responseJson = JSON.parse(responseText);
+    } catch {
+      throw new Error(`Google API status ${response.status}: ${responseText.slice(0, 150)}`);
     }
-  }
 
-  const envKey = process.env.GEMINI_API_KEY?.trim();
-  if (envKey && !result.includes(envKey)) {
-    result.push(envKey);
-  }
+    if (!response.ok || responseJson.error) {
+      const errorObj = responseJson.error || {};
+      const errMessage = errorObj.message || `HTTP ${response.status}`;
+      const err = new Error(errMessage);
+      (err as any).status = response.status;
+      (err as any).code = errorObj.code || response.status;
+      (err as any).details = errorObj;
+      throw err;
+    }
 
-  return result;
+    const candidate = responseJson.candidates?.[0];
+    const candidatePart = candidate?.content?.parts?.[0];
+    const outputText = candidatePart?.text || "";
+
+    if (!outputText) {
+      const finishReason = candidate?.finishReason;
+      if (finishReason && finishReason !== "STOP") {
+        throw new Error(`AI berhenti dengan alasan: ${finishReason}`);
+      }
+      throw new Error("Model Gemini tidak mengembalikan teks jawaban.");
+    }
+
+    return { text: outputText };
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      const timeoutErr = new Error("Waktu tunggu habis (Timeout). Server Google AI lambat merespons.");
+      (timeoutErr as any).status = 504;
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-export async function verifyKeysCore(rawKeys: string[]): Promise<KeyCheckResult[]> {
-  const testSingleKey = async (rawKey: string, index: number): Promise<KeyCheckResult> => {
-    const key = (rawKey || "").trim();
-    if (!key) {
+/**
+ * Test single API key validity & quota via lightweight ping
+ */
+export async function verifySingleKey(rawKey: string, index: number): Promise<KeyCheckResult> {
+  const key = (rawKey || "").trim();
+  if (!key) {
+    return {
+      key: "",
+      index: index + 1,
+      status: "invalid",
+      message: "API Key kosong",
+    };
+  }
+
+  // Ping test
+  try {
+    await callGeminiRest(key, "gemini-flash-latest", [{ text: "ping" }], 8000);
+    return {
+      key,
+      index: index + 1,
+      status: "ready",
+      message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
+    };
+  } catch (err: any) {
+    if (isQuotaError(err)) {
       return {
-        key: "",
+        key,
+        index: index + 1,
+        status: "exhausted",
+        message: "Kuota Habis / Rate Limit Terlampaui (429)",
+      };
+    }
+    if (isInvalidKeyError(err)) {
+      return {
+        key,
         index: index + 1,
         status: "invalid",
-        message: "API Key kosong",
+        message: "API Key Tidak Valid / Salah",
       };
     }
 
+    // Try fallback model
     try {
-      const ai = new GoogleGenAI({
-        apiKey: key,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
-
-      const pingWithTimeout = async (model: string, timeoutMs: number) => {
-        return new Promise<any>((resolve, reject) => {
-          const timer = setTimeout(() => {
-            reject(new Error("Timeout verifikasi (server lambat merespons)"));
-          }, timeoutMs);
-
-          ai.models
-            .generateContent({
-              model,
-              contents: "ping",
-              config: {
-                maxOutputTokens: 2,
-              },
-            })
-            .then((res) => {
-              clearTimeout(timer);
-              resolve(res);
-            })
-            .catch((err) => {
-              clearTimeout(timer);
-              reject(err);
-            });
-        });
+      await callGeminiRest(key, "gemini-3.1-flash-lite", [{ text: "ping" }], 6000);
+      return {
+        key,
+        index: index + 1,
+        status: "ready",
+        message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
       };
-
-      try {
-        await pingWithTimeout("gemini-flash-latest", 8000);
+    } catch (liteErr: any) {
+      if (isQuotaError(liteErr)) {
+        return {
+          key,
+          index: index + 1,
+          status: "exhausted",
+          message: "Kuota Habis / Rate Limit Terlampaui (429)",
+        };
+      }
+      if (isInvalidKeyError(liteErr)) {
+        return {
+          key,
+          index: index + 1,
+          status: "invalid",
+          message: "API Key Tidak Valid / Salah",
+        };
+      }
+      if (isTransientError(liteErr) || isTransientError(err)) {
         return {
           key,
           index: index + 1,
           status: "ready",
-          message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
+          message: "Aktif (Google AI merespons, siap digunakan)",
         };
-      } catch (err: any) {
-        if (isQuotaError(err)) {
-          return {
-            key,
-            index: index + 1,
-            status: "exhausted",
-            message: "Kuota Habis / Rate Limit Terlampaui (429)",
-          };
-        }
-        if (isInvalidKeyError(err)) {
-          return {
-            key,
-            index: index + 1,
-            status: "invalid",
-            message: "API Key Tidak Valid / Salah",
-          };
-        }
-
-        // Fast backup test with gemini-3.1-flash-lite
-        try {
-          await pingWithTimeout("gemini-3.1-flash-lite", 6000);
-          return {
-            key,
-            index: index + 1,
-            status: "ready",
-            message: "Aktif & Siap Digunakan (Token/Kuota Tersedia)",
-          };
-        } catch (liteErr: any) {
-          if (isQuotaError(liteErr)) {
-            return {
-              key,
-              index: index + 1,
-              status: "exhausted",
-              message: "Kuota Habis / Rate Limit Terlampaui (429)",
-            };
-          }
-          if (isInvalidKeyError(liteErr)) {
-            return {
-              key,
-              index: index + 1,
-              status: "invalid",
-              message: "API Key Tidak Valid / Salah",
-            };
-          }
-          if (isTransientError(liteErr) || isTransientError(err)) {
-            return {
-              key,
-              index: index + 1,
-              status: "ready",
-              message: "Aktif (Google AI merespons, siap digunakan)",
-            };
-          }
-
-          return {
-            key,
-            index: index + 1,
-            status: "error",
-            message: `Gagal: ${cleanErrorMessage(liteErr || err).slice(0, 80)}`,
-          };
-        }
       }
-    } catch (unexpectedErr: any) {
+
       return {
         key,
         index: index + 1,
         status: "error",
-        message: `Gagal: ${cleanErrorMessage(unexpectedErr).slice(0, 80)}`,
+        message: `Gagal: ${cleanErrorMessage(liteErr || err).slice(0, 80)}`,
       };
     }
-  };
+  }
+}
 
-  return Promise.all(rawKeys.map((k, i) => testSingleKey(k, i)));
+export async function verifyKeysCore(rawKeys: string[]): Promise<KeyCheckResult[]> {
+  return Promise.all(rawKeys.map((k, i) => verifySingleKey(k, i)));
 }
 
 export async function analyzeWithKeyRotation(
@@ -367,7 +367,7 @@ export async function analyzeWithKeyRotation(
 ): Promise<any> {
   const parts: any[] = [{ text: COMPACT_SYSTEM_PROMPT }];
 
-  let questionText = `[SOAL #${soal.nomorSoal}] Maks: ${soal.nilaiMaksimal}\nNaskah: ${
+  let questionText = `[SOAL #${soal.nomorSoal}] Nilai Maksimal: ${soal.nilaiMaksimal}\nNaskah Soal: ${
     soal.naskahSoal?.trim() || "(Lihat gambar lampiran soal)"
   }\n`;
 
@@ -386,7 +386,7 @@ export async function analyzeWithKeyRotation(
 
   questionText += `\n[JAWABAN SISWA]\n`;
   if (soal.jawabanTeks?.trim()) {
-    questionText += `Teks: ${soal.jawabanTeks.trim()}\n`;
+    questionText += `Teks Jawaban: ${soal.jawabanTeks.trim()}\n`;
   }
 
   if (soal.jawabanGambarBase64 && soal.jawabanGambarMimeType) {
@@ -410,76 +410,50 @@ export async function analyzeWithKeyRotation(
     const key = candidateKeys[keyIdx].trim();
     if (!key) continue;
 
-    try {
-      const ai = new GoogleGenAI({
-        apiKey: key,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
+    for (let modelIdx = 0; modelIdx < CANDIDATE_MODELS.length; modelIdx++) {
+      const modelName = CANDIDATE_MODELS[modelIdx];
+      try {
+        const response = await callGeminiRest(key, modelName, parts, 30000);
+        const raw = response.text || "";
+        const maxVal = soal.nilaiMaksimal || 10;
+        const parsed = safeParseAnalysisJson(raw, maxVal);
 
-      for (let modelIdx = 0; modelIdx < CANDIDATE_MODELS.length; modelIdx++) {
-        const modelName = CANDIDATE_MODELS[modelIdx];
-        try {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: { parts },
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: analysisSchema,
-              temperature: 0.1,
-            },
-          });
+        const clampedNilai = Math.max(0, Math.min(maxVal, Number(parsed.nilaiDiberikan) || 0));
+        const clampedKesesuaian = Math.max(0, Math.min(100, Math.round(Number(parsed.kesesuaianPersen) || 0)));
+        const clampedAi = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiAiPersen) || 0)));
 
-          const raw = response.text || "";
-          const maxVal = soal.nilaiMaksimal || 10;
-          const parsed = safeParseAnalysisJson(raw, maxVal);
+        return {
+          soalId: soal.id,
+          nomorSoal: soal.nomorSoal,
+          kesesuaianPersen: clampedKesesuaian,
+          indikasiAiPersen: clampedAi,
+          nilaiDiberikan: Math.round(clampedNilai * 10) / 10,
+          nilaiMaksimal: maxVal,
+          aiDugaanKategori: parsed.aiDugaanKategori || "Asli Siswa",
+          ringkasanAnalisis: parsed.ringkasanAnalisis || "Analisis selesai.",
+          ciriCiriAiTerdeteksi: Array.isArray(parsed.ciriCiriAiTerdeteksi) ? parsed.ciriCiriAiTerdeteksi : [],
+          kelebihanJawaban: Array.isArray(parsed.kelebihanJawaban) ? parsed.kelebihanJawaban : [],
+          kelemahanJawaban: Array.isArray(parsed.kelemahanJawaban) ? parsed.kelemahanJawaban : [],
+          rekomendasiGuru: parsed.rekomendasiGuru || "Pertahankan kualitas pembelajaran.",
+          analyzedAt: new Date().toISOString(),
+        };
+      } catch (err: any) {
+        lastError = err;
+        console.log(`[Key #${keyIdx + 1}] Model ${modelName} returned:`, cleanErrorMessage(err));
 
-          const clampedNilai = Math.max(0, Math.min(maxVal, Number(parsed.nilaiDiberikan) || 0));
-          const clampedKesesuaian = Math.max(0, Math.min(100, Math.round(Number(parsed.kesesuaianPersen) || 0)));
-          const clampedAi = Math.max(0, Math.min(100, Math.round(Number(parsed.indikasiAiPersen) || 0)));
+        if (isInvalidKeyError(err)) {
+          break;
+        }
 
-          return {
-            soalId: soal.id,
-            nomorSoal: soal.nomorSoal,
-            kesesuaianPersen: clampedKesesuaian,
-            indikasiAiPersen: clampedAi,
-            nilaiDiberikan: Math.round(clampedNilai * 10) / 10,
-            nilaiMaksimal: maxVal,
-            aiDugaanKategori: parsed.aiDugaanKategori || "Asli Siswa",
-            ringkasanAnalisis: parsed.ringkasanAnalisis || "Analisis selesai.",
-            ciriCiriAiTerdeteksi: Array.isArray(parsed.ciriCiriAiTerdeteksi) ? parsed.ciriCiriAiTerdeteksi : [],
-            kelebihanJawaban: Array.isArray(parsed.kelebihanJawaban) ? parsed.kelebihanJawaban : [],
-            kelemahanJawaban: Array.isArray(parsed.kelemahanJawaban) ? parsed.kelemahanJawaban : [],
-            rekomendasiGuru: parsed.rekomendasiGuru || "Pertahankan kualitas pembelajaran.",
-            analyzedAt: new Date().toISOString(),
-          };
-        } catch (err: any) {
-          lastError = err;
-          console.log(
-            `[Key #${keyIdx + 1}] Model ${modelName} returned:`,
-            cleanErrorMessage(err)
-          );
-
-          if (isInvalidKeyError(err)) {
-            break;
-          }
-
-          if (modelIdx < CANDIDATE_MODELS.length - 1) {
-            continue;
-          } else {
-            await sleep(500);
-          }
+        if (modelIdx < CANDIDATE_MODELS.length - 1) {
+          continue;
+        } else {
+          await sleep(400);
         }
       }
+    }
 
-      if (isInvalidKeyError(lastError)) {
-        continue;
-      }
-    } catch (genAiInitErr: any) {
-      lastError = genAiInitErr;
+    if (isInvalidKeyError(lastError)) {
       continue;
     }
   }

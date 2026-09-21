@@ -23,6 +23,7 @@ import {
 } from "./utils/license";
 import { exportSessionsToExcel } from "./utils/excelExport";
 import { safeFetchJson } from "./utils/apiHelper";
+import { analyzeSingleQuestion, analyzeBatchQuestions } from "./utils/geminiClient";
 import { CheckCircle2, AlertCircle, Info, X, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { sound } from "./utils/audio";
@@ -363,26 +364,22 @@ export default function App() {
     setAnalyzingMap((prev) => ({ ...prev, [soal.id]: true }));
 
     try {
-      const data = await safeFetchJson<{ result: any }>("/api/analyze-single", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: soal.id,
-          nomorSoal: soal.nomorSoal,
-          naskahSoal: soal.naskahSoal,
-          gambarSoalBase64: soal.gambarSoalBase64,
-          gambarSoalMimeType: soal.gambarSoalMimeType,
-          nilaiMaksimal: soal.nilaiMaksimal,
-          jawabanTeks: soal.jawabanTeks,
-          jawabanGambarBase64: soal.jawabanGambarBase64,
-          jawabanGambarMimeType: soal.jawabanGambarMimeType,
-          apiKeys: apiKeys,
-        }),
+      const result = await analyzeSingleQuestion({
+        id: soal.id,
+        nomorSoal: soal.nomorSoal,
+        naskahSoal: soal.naskahSoal,
+        gambarSoalBase64: soal.gambarSoalBase64,
+        gambarSoalMimeType: soal.gambarSoalMimeType,
+        nilaiMaksimal: soal.nilaiMaksimal,
+        jawabanTeks: soal.jawabanTeks,
+        jawabanGambarBase64: soal.jawabanGambarBase64,
+        jawabanGambarMimeType: soal.jawabanGambarMimeType,
+        apiKeys: apiKeys,
       });
 
       setSession((prev) => {
         const nextSoalList = prev.soalList.map((s) =>
-          s.id === soal.id ? { ...s, analisis: data.result, isSaved: true } : s
+          s.id === soal.id ? { ...s, analisis: result, isSaved: true } : s
         );
         const totals = calculateSessionTotals(nextSoalList);
         const updatedSession = {
@@ -434,17 +431,10 @@ export default function App() {
         jawabanGambarMimeType: s.jawabanGambarMimeType,
       }));
 
-      const data = await safeFetchJson<{ results: any[] }>("/api/analyze-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          soalList: payload,
-          apiKeys: apiKeys,
-        }),
-      });
+      const results = await analyzeBatchQuestions(payload, apiKeys);
 
       const resultsMap: Record<string, any> = {};
-      (data.results || []).forEach((r: any) => {
+      (results || []).forEach((r: any) => {
         resultsMap[r.soalId] = r;
       });
 
